@@ -30,10 +30,15 @@ passed to the form it edits that customer, otherwise it adds a new one.
 The form checks the inputs before saving and shows an error message
 under any input that is wrong.
 
+New customers get a unique fake id from `crypto.randomUUID()` and today's
+date in the computer's local timezone (`toLocaleDateString('en-CA')`).
+The real backend will create the `_id` later.
+
 ## Validation rules
 - Name: required
 - Phone: required, exactly 10 digits
-- Email: optional, but must be a valid format if entered
+- Email: optional, but if entered it must have exactly one @, a dot after it,
+  and no two dots in a row
 
 ## How it was tested
 Tested manually in the browser with `npm run dev` at `localhost:5173/customers`.
@@ -46,4 +51,28 @@ Tested manually in the browser with `npm run dev` at `localhost:5173/customers`.
 | 4 | Search `zzz` | "No customers found." message | Passed |
 | 5 | Click Add Customer and Save with empty fields | "Name is required" and "Phone must be 10 digits" show | Passed. Both errors appeared and nothing was saved. |
 | 6 | Enter phone `123` | "Phone must be 10 digits" shows | Passed |
-| 7 | Enter email `abc` | "Email is not valid" shows |
+| 7 | Enter email `abc` | "Email is not valid" shows | Passed |
+| 8 | Add a valid customer (name and 10-digit phone) | New customer appears in the table | Passed |
+| 9 | Click Edit on a customer, change the name, Save | Table shows the updated name | Passed |
+| 10 | Click Cancel on the form | Form closes and nothing changes | Passed |
+| 11 | Add a customer and check the registration date | Today's local date shows | Passed |
+| 12 | Email `a@b@c.com` | "Email is not valid" shows | Passed |
+| 13 | Email `a@b..com` | "Email is not valid" shows | Passed |
+| 14 | Email `mary@example.com` | Accepted, customer saves | Passed |
+
+## Known issues / to do
+- Data resets to the 3 mock customers when the page is refreshed, because
+  nothing is saved anywhere yet.
+- Customers added or edited are also lost when the user leaves the page and
+  returns, because the list is reset from mock data each time. This will be
+  solved when the list comes from the backend API.
+- Replace the mock data with real API calls once the backend is ready.
+- Confirm the field names with Jose (backend developer).
+- No delete button yet (not in the requirements, can add if needed).
+
+## Fixes made after code review
+- Replaced `Date.now()` with `crypto.randomUUID()` so two customers can never
+  get the same id.
+- Registration date now uses local time instead of UTC, so it is correct in
+  Kenya between midnight and 3 AM.
+- Email validation now rejects a second @ and consecutive dots.

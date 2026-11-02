@@ -34,8 +34,13 @@ function CustomerForm({ customer, onSave, onCancel }: Props) {
     if (!/^\d{10}$/.test(phone)) {
       newErrors.phone = 'Phone must be 10 digits'
     }
-    // Email is optional, but if they type one it must have @ and a dot
-    if (email !== '' && !/^\S+@\S+\.\S+$/.test(email)) {
+    // Email is optional. If they type one, it must be: text, ONE @, text, a dot, text.
+    // [^\s@] means "any character except a space or @", so a second @ is rejected.
+    // We also reject two dots in a row like a@b..com
+    if (
+      email !== '' &&
+      (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.includes('..'))
+    ) {
       newErrors.email = 'Email is not valid'
     }
 

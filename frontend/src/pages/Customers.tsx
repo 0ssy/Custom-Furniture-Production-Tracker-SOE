@@ -43,12 +43,15 @@ function Customers() {
         customers.map((c) => (c._id === editing._id ? { ...c, ...data } : c))
       )
     } else {
-      // ADD: make a new customer. Date.now() gives a unique fake id.
-      // The real backend will make the _id for us later.
+      // ADD: make a new customer.
+      // crypto.randomUUID() gives a unique fake id every time, so two
+      // customers can never share an id. The real backend will make the _id later.
       const newCustomer: Customer = {
-        _id: Date.now().toString(),
+        _id: crypto.randomUUID(),
         ...data,
-        createdAt: new Date().toISOString().slice(0, 10), // today as YYYY-MM-DD
+        // toLocaleDateString('en-CA') gives today's date as YYYY-MM-DD
+        // using the computer's own timezone, so Kenya time is correct
+        createdAt: new Date().toLocaleDateString('en-CA'),
       }
       setCustomers([...customers, newCustomer])
     }
