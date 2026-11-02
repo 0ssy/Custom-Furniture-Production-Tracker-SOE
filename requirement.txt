@@ -1,0 +1,97 @@
+# Custom Furniture Production Tracker
+## Project Requirements & Frontend–Backend Agreement
+
+### 1. Project Overview
+The Custom Furniture Production Tracker is a web-based system for managing customers, furniture orders, materials, production progress, payments and deliveries.
+
+### 2. Technology Stack
+
+**Frontend**
+- React
+- TypeScript
+- CSS or Tailwind CSS
+
+**Backend**
+- Node.js
+- Express.js
+- TypeScript
+- MongoDB
+- Mongoose
+
+### 3. Main System Modules
+
+#### Module 1: Customer and Order Management
+- Register and manage customers.
+- View, search and update customer records.
+- Create furniture orders.
+- Record order details, quantities, prices and specifications.
+- Track order status.
+
+#### Module 2: Furniture and Production Management
+- Manage furniture types and specifications.
+- Record dimensions, materials, colours and designs.
+- Manage material inventory.
+- Assign orders to production.
+- Update production stages and progress.
+
+#### Module 3: Payments and Delivery
+- Record customer payments and deposits.
+- Calculate outstanding balances.
+- Track payment status.
+- Schedule deliveries.
+- Update delivery status.
+- Generate sales and production reports.
+
+### 4. User Roles
+The system may support:
+- Administrator
+- Manager
+- Sales Staff
+- Production Staff
+- Delivery Staff
+
+Access permissions will be agreed upon during implementation.
+
+### 5. Frontend–Backend Responsibilities
+
+**Frontend developer**
+- Build the user interface and pages.
+- Create forms, tables and dashboards.
+- Connect frontend components to backend API endpoints.
+- Display validation and error messages.
+- Test frontend functionality.
+
+**Backend developer**
+- Design the MongoDB database.
+- Create database models.
+- Implement REST API endpoints.
+- Implement validation and business logic.
+- Implement authentication and authorization.
+- Test API functionality.
+- Document API endpoints.
+
+### 6. Integration Agreement
+- The frontend and backend will use TypeScript.
+- Data will be exchanged using JSON.
+- The backend will expose REST API endpoints.
+- Both developers must agree on field names and data structures before integration.
+- API endpoints and response formats will be documented.
+- The backend development server will initially use port 5000.
+
+### 7. Development Workflow
+- Both developers will use the same GitHub repository.
+- Work should be committed regularly.
+- Each developer should use their own feature branch.
+- Changes will be merged into the main branch after review.
+- Integration testing will be performed before submission.
+
+### 8. Initial Implementation Priorities
+1. Backend project configuration.
+2. Frontend project configuration.
+3. Database connection.
+4. Customer management.
+5. Furniture and order management.
+6. Production tracking.
+7. Payments and delivery.
+8. Authentication and reports.
+9. Integration and testing.
