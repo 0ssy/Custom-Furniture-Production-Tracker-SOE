@@ -1,8 +1,11 @@
 import express from "express";
 import cors from "cors";
+import customerRoutes from "./routes/customerRoutes.js";
+import furnitureRoutes from "./routes/furnitureRoutes.js";
 
 const app = express(); 
 
+// Middleware
 app.use(cors());
 app.use(express.json());
 
@@ -13,6 +16,9 @@ app.get("/", (req, res) => {
     });
 });
 
+// Routes
+app.use("/api/customers", customerRoutes);
+app.use("/api/furniture", furnitureRoutes);
 export default app;
 
 //using express() creates our express app
