@@ -75,9 +75,11 @@ function OrderForm({ order, customers, onSave, onCancel }: Props) {
       newErrors.quantity = 'Quantity must be a whole number of 1 or more'
     }
 
-    // Total amount must be a number bigger than 0
+    // Total amount must be a real number bigger than 0.
+    // Number.isFinite rejects NaN and Infinity (for example typing 1e999),
+    // so it replaces the old isNaN check.
     const amount = Number(totalAmount)
-    if (totalAmount.trim() === '' || isNaN(amount) || amount <= 0) {
+    if (totalAmount.trim() === '' || !Number.isFinite(amount) || amount <= 0) {
       newErrors.totalAmount = 'Amount must be a number greater than 0'
     }
 

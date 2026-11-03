@@ -55,6 +55,7 @@ Tested manually in the browser at `localhost:5173/orders`.
 | Check add order | TC11: Add an order with valid details | Add form is open | 1. Fill the inputs<br>2. Click Save | Customer: Mary Wanjiku<br>Type: Bed<br>Quantity: `2`<br>Amount: `60000` | Order appears in the table with today's date, amount shows as 60,000, form closes | New Bed order appeared with today's date, amount showed as 60,000 and the form closed | Pass |
 | Check edit order | TC12: Change an order's status | Orders page is open | 1. Click Edit on the Wardrobe order<br>2. Change status to In Production<br>3. Click Save | Status: In Production | Table shows the new status | The Wardrobe order now shows In Production | Pass |
 | Check cancel | TC13: Cancel the form | Add or edit form is open | 1. Type something in an input<br>2. Click Cancel | Any text | Form closes, nothing changes | Form closed and the table did not change | Pass |
+| Check add form validation | TC14: Enter a huge amount | Add form is open | 1. Fill the other inputs<br>2. Type the amount<br>3. Click Save | Amount: `1e999` | "Amount must be a number greater than 0" shows | The amount error was shown and nothing was saved | Pass |
 
 ## Known issues / to do
 - Data resets to the 3 mock orders when the page is refreshed or when the user
@@ -66,3 +67,10 @@ Tested manually in the browser at `localhost:5173/orders`.
 - Confirm the field names with Jose (backend developer).
 - Status can be edited freely. Rules about which status can follow which
   (for example a Delivered order cannot go back to Pending) can be added later.
+-`crypto.randomUUID()` only works on `localhost` or HTTPS. If the app is opened
+  over plain HTTP from another device on the network, adding an order will fail.
+  Not a problem on `localhost`, and it goes away when the backend creates the ids.
+
+  ## Fixes made after code review
+- Amount validation now uses `Number.isFinite`, so values like `1e999` (Infinity)
+  are rejected.
