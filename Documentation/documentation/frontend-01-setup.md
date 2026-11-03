@@ -22,8 +22,14 @@ Layout is the parent route. Each page is displayed inside its Outlet,
 so the sidebar stays on screen while only the right side changes.
 
 ## How it was tested
-Ran `npm run dev` and checked that all 9 menu links open the right page,
-the active link is highlighted, and the dashboard cards display.
+Tested manually in the browser at `localhost:5173`.
+
+| Test Scenario | Test Case | Pre-Conditions | Test Steps | Test Data | Expected Results | Actual Results | Pass/Fail |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Check navigation menu | TC01: Check the sidebar shows all menu items | Frontend is running with `npm run dev` | 1. Open `localhost:5173` | None | Sidebar shows 9 items: Dashboard, Customers, Orders, Furniture, Materials, Production, Payments, Deliveries, Reports | All 9 items were shown | Pass |
+| Check navigation menu | TC02: Click a menu item | App is open | 1. Click Customers in the sidebar | None | Page changes without a full reload | Page changed without reloading | Pass |
+| Check navigation menu | TC03: Check the active item is highlighted | App is open | 1. Click any menu item | None | Clicked item is highlighted in amber | Item was highlighted | Pass |
+| Check dashboard | TC04: Check the dashboard cards | App is open | 1. Click Dashboard | None | 3 cards show: Total Orders, In Production, Pending Deliveries | 3 cards were shown | Pass |
 
 ## Known issues / to do
 - No "Not Found" page yet

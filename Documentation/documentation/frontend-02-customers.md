@@ -41,24 +41,23 @@ The real backend will create the `_id` later.
   and no two dots in a row
 
 ## How it was tested
-Tested manually in the browser with `npm run dev` at `localhost:5173/customers`.
+Tested manually in the browser at `localhost:5173/customers`.
 
-| # | Test | Expected | Result |
-| --- | --- | --- | --- |
-| 1 | Open the Customers page | Table shows 3 mock customers | Passed. Mary, John and Faith were shown. |
-| 2 | Search `mary` | Only Mary Wanjiku shows | Passed |
-| 3 | Search `0723` | Only John Otieno shows | Passed |
-| 4 | Search `zzz` | "No customers found." message | Passed |
-| 5 | Click Add Customer and Save with empty fields | "Name is required" and "Phone must be 10 digits" show | Passed. Both errors appeared and nothing was saved. |
-| 6 | Enter phone `123` | "Phone must be 10 digits" shows | Passed |
-| 7 | Enter email `abc` | "Email is not valid" shows | Passed |
-| 8 | Add a valid customer (name and 10-digit phone) | New customer appears in the table | Passed |
-| 9 | Click Edit on a customer, change the name, Save | Table shows the updated name | Passed |
-| 10 | Click Cancel on the form | Form closes and nothing changes | Passed |
-| 11 | Add a customer and check the registration date | Today's local date shows | Passed |
-| 12 | Email `a@b@c.com` | "Email is not valid" shows | Passed |
-| 13 | Email `a@b..com` | "Email is not valid" shows | Passed |
-| 14 | Email `mary@example.com` | Accepted, customer saves | Passed |
+| Test Scenario | Test Case | Pre-Conditions | Test Steps | Test Data | Expected Results | Actual Results | Pass/Fail |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Check customer list display | TC01: Check the list shows on opening the page | Frontend is running with `npm run dev` | 1. Open `localhost:5173`<br>2. Click Customers in the sidebar | None | Table shows 3 mock customers | Mary, John and Faith were shown | Pass |
+| Check search | TC02: Search by name | Customers page is open | 1. Click the search box<br>2. Type the name | `mary` | Only Mary Wanjiku is shown | Only Mary was shown | Pass |
+| Check search | TC03: Search by phone | Customers page is open | 1. Click the search box<br>2. Type the phone digits | `0723` | Only John Otieno is shown | Only John was shown | Pass |
+| Check search | TC04: Search with no match | Customers page is open | 1. Click the search box<br>2. Type text that matches nobody | `zzz` | "No customers found." message shows | Message was shown | Pass |
+| Check add form validation | TC05: Save an empty form | Customers page is open | 1. Click + Add Customer<br>2. Leave all inputs empty<br>3. Click Save | Empty inputs | "Name is required" and "Phone must be 10 digits" show, nothing is saved | Both errors showed, nothing was saved | Pass |
+| Check add form validation | TC06: Enter a short phone number | Add form is open | 1. Type a name<br>2. Type a short phone<br>3. Click Save | Name: `Test`<br>Phone: `123` | "Phone must be 10 digits" shows | Error was shown | Pass |
+| Check add form validation | TC07: Enter an email with no @ | Add form is open | 1. Fill name and valid phone<br>2. Type the email<br>3. Click Save | Email: `abc` | "Email is not valid" shows | Error was shown | Pass |
+| Check add form validation | TC08: Enter an email with two @ | Add form is open | 1. Fill name and valid phone<br>2. Type the email<br>3. Click Save | Email: `a@b@c.com` | "Email is not valid" shows | Error was shown | Pass |
+| Check add form validation | TC09: Enter an email with two dots in a row | Add form is open | 1. Fill name and valid phone<br>2. Type the email<br>3. Click Save | Email: `a@b..com` | "Email is not valid" shows | Error was shown | Pass |
+| Check add customer | TC10: Add a customer with valid details | Add form is open | 1. Fill the inputs<br>2. Click Save | Name: `Peter Kamau`<br>Phone: `0745678901`<br>Email: `mary@example.com` | Customer appears in the table, form closes | Customer was added to the table | Pass |
+| Check add customer | TC11: Check the registration date of a new customer | Customer from TC10 was added | 1. Look at the Registered column of the new customer | None | Today's local date is shown | Today's date was shown | Pass |
+| Check edit customer | TC12: Edit a customer's name | Customers page is open | 1. Click Edit on Mary<br>2. Change the name<br>3. Click Save | Name: `Mary W. Njeri` | Table shows the updated name | Name was updated in the table | Pass |
+| Check cancel | TC13: Cancel the form | Add or edit form is open | 1. Type something in an input<br>2. Click Cancel | Any text | Form closes, nothing changes | Form closed, no changes | Pass |
 
 ## Known issues / to do
 - Data resets to the 3 mock customers when the page is refreshed, because
