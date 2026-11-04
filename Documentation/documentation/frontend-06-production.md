@@ -31,8 +31,10 @@ the backend is not finished yet.
 "Mary Wanjiku - Wardrobe (x1)". Progress is not typed in. It is worked out from
 the position of the stage in the list: Not Started is 0% and Completed is 100%.
 The Next Stage button moves the job one step forward and is disabled on
-Completed. The assign dropdown only lists orders that are not in production
-yet and are not Cancelled or Delivered.
+Completed, and also while the same job is open in the edit form. The assign
+dropdown only lists orders that are not in production yet and are not
+Cancelled, Delivered or Completed. Today's date is built by hand as
+`YYYY-MM-DD` so it is the same in every browser.
 
 ## Validation rules
 - Order: must be chosen (when assigning)
@@ -60,6 +62,8 @@ Tested manually in the browser at `localhost:5173/production`.
 | Check edit job | TC14: Edit a job's stage and person | Production page is open | 1. Click Edit on the Sofa job<br>2. Change the stage and the name<br>3. Click Save | Stage: Finishing<br>Assigned to: `Paul Mutua` | Table shows Finishing, 67% and Paul Mutua | Table showed Finishing, 67% and Paul Mutua | Pass |
 | Check overdue label | TC15: Overdue label shows for a late job | Production page is open | 1. Click Edit on the Sofa job<br>2. Change the end date to `2026-11-02` (the start date)<br>3. Click Save | End date: `2026-11-02` | A red "Overdue" label shows next to the date, because the date has passed and the job is not completed | The red Overdue label was shown | Pass |
 | Check cancel | TC16: Cancel the form | Assign or edit form is open | 1. Type something in an input<br>2. Click Cancel | Any text | Form closes, nothing changes | Form closed, no changes | Pass |
+| Check assign dropdown | TC17: Completed orders are not listed | Assign form is open | 1. Open the Order dropdown | None | Faith Achieng's Dining Table (Completed) is not listed | The Completed order was not listed | Pass |
+| Check next stage | TC18: Next Stage is disabled while the job is being edited | Production page is open | 1. Click Edit on the Sofa job<br>2. Look at the Sofa row's Next Stage button | None | The Sofa's Next Stage button is greyed out until the form is saved or cancelled | The button was greyed out while the form was open | Pass |
 
 ## Known issues / to do
 - Data resets to the 2 mock jobs when the page is refreshed or when the user
@@ -72,7 +76,16 @@ Tested manually in the browser at `localhost:5173/production`.
 - Materials are not yet reduced when production starts.
 - `crypto.randomUUID()` only works on `localhost` or HTTPS. This goes away when
   the backend creates the ids.
+- Customers and Orders still use `toLocaleDateString('en-CA')` for the date. It
+  works in Chrome. Production now uses a hand-built `YYYY-MM-DD` helper, and the
+  other pages can be switched to it later.
 - The stage names were chosen by us and may change once the lecturer or Jose
   confirms the real workshop process.
 - Replace the mock data with real API calls once the backend is ready.
 - Confirm the field names with Jose (backend developer).
+
+## Fixes made after code review
+- Completed orders can no longer be assigned to production.
+- The Next Stage button is disabled while the same job is open in the edit form,
+  so saving the form cannot undo a stage change.
+- Today's date is now built as `YYYY-MM-DD` by hand so it is the same in every browser.

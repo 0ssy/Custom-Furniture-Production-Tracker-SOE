@@ -6,6 +6,16 @@ import { mockOrders } from '../data/mockOrders'
 import { mockCustomers } from '../data/mockCustomers'
 import ProductionForm from '../components/ProductionForm'
 
+// Gives today's date as YYYY-MM-DD using the computer's own timezone.
+// We build it by hand from the year, month and day, so it is the same in
+// every browser. padStart adds a leading 0, so month 5 becomes "05".
+function getToday() {
+  const d = new Date()
+  const month = String(d.getMonth() + 1).padStart(2, '0') // getMonth starts at 0
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${month}-${day}`
+}
+
 function Production() {
   // The production jobs shown in the table. Starts with the fake data.
   const [jobs, setJobs] = useState<ProductionJob[]>(mockProduction)
@@ -27,8 +37,8 @@ function Production() {
   // Which job are we editing? null means we are assigning a new one.
   const [editing, setEditing] = useState<ProductionJob | null>(null)
 
-  // Today's date as YYYY-MM-DD in the computer's own timezone
-  const today = new Date().toLocaleDateString('en-CA')
+  // Today's date as YYYY-MM-DD (see the helper at the top of the file)
+  const today = getToday()
 
   // A job only stores the orderId, so this builds readable text for it,
   // like "Mary Wanjiku - Wardrobe (x1)". It finds the order, then the customer.
@@ -41,12 +51,14 @@ function Production() {
   }
 
   // Orders that can still be assigned to production:
-  // not already in a job, and not Cancelled or Delivered.
+  // not already in a job, and not Cancelled, Delivered or Completed
+  // (a Completed order is already finished, so it needs no new job).
   const availableOrders = orders.filter(
     (o) =>
       !jobs.some((j) => j.orderId === o._id) &&
       o.status !== 'Cancelled' &&
-      o.status !== 'Delivered'
+      o.status !== 'Delivered' &&
+      o.status !== 'Completed'
   )
 
   // Keep only the jobs that match BOTH the search text and the stage filter.
@@ -204,10 +216,12 @@ function Production() {
               </td>
               <td className="p-2">{j.notes || '-'}</td>
               <td className="p-2 whitespace-nowrap">
-                {/* Next Stage is disabled when the job is already Completed */}
+                {/* Next Stage is disabled when the job is Completed,
+                    or when this same job is open in the edit form
+                    (otherwise saving the form could undo the new stage) */}
                 <button
                   onClick={() => handleNextStage(j)}
-                  disabled={j.stage === 'Completed'}
+                  disabled={j.stage === 'Completed' || editing?._id === j._id}
                   className="bg-amber-600 text-white px-2 py-1 rounded mr-2 disabled:bg-gray-300"
                 >
                   Next Stage
