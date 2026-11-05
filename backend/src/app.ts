@@ -2,6 +2,10 @@ import express from "express";
 import cors from "cors";
 import customerRoutes from "./routes/customerRoutes.js";
 import furnitureRoutes from "./routes/furnitureRoutes.js";
+import materialRoutes from "./routes/materialRoutes.js";
+import orderRoutes from "./routes/orderRoutes.js";
+import paymentRoutes from "./routes/paymentRoutes.js";
+import productionRoutes from "./routes/productionRoutes.js";
 
 const app = express(); 
 
@@ -19,6 +23,10 @@ app.get("/", (req, res) => {
 // Routes
 app.use("/api/customers", customerRoutes);
 app.use("/api/furniture", furnitureRoutes);
+app.use("/api/materials", materialRoutes);
+app.use("/api/orders", orderRoutes);
+app.use("/api/payments", paymentRoutes);
+app.use("/api/production", productionRoutes);
 export default app;
 
 //using express() creates our express app
