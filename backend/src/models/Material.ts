@@ -19,24 +19,20 @@ const materialSchema = new Schema<IMaterial>(
       type: String,
       required: [true, "Material name is required"],
       trim: true,
+      minlength: [2, "Material name must be at least 2 characters"],
     },
 
     description: {
       type: String,
       required: [true, "Material description is required"],
       trim: true,
+      minlength: [3, "Description must be at least 3 characters"],
     },
 
     category: {
       type: String,
       required: [true, "Material category is required"],
-      enum: [
-        "Timber",
-        "Hardware",
-        "Fabric",
-        "Finishing",
-        "Other",
-      ],
+      enum: ["Timber", "Hardware", "Fabric", "Finishing", "Other"],
     },
 
     unit: {

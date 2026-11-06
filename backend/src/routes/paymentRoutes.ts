@@ -1,4 +1,5 @@
 import express from "express";
+import { authorize } from "../middleware/authMiddleware.js";
 
 import {
   createPayment,
@@ -14,6 +15,6 @@ router.post("/", createPayment);
 router.get("/", getAllPayments);
 router.get("/:id", getPaymentById);
 router.put("/:id", updatePayment);
-router.delete("/:id", deletePayment);
+router.delete("/:id", authorize("Admin"), deletePayment);
 
 export default router;

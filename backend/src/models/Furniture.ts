@@ -22,12 +22,14 @@ const furnitureSchema = new Schema<IFurniture>(
       type: String,
       required: [true, "Furniture name is required"],
       trim: true,
+      minlength: [2, "Furniture name must be at least 2 characters"],
     },
 
     description: {
       type: String,
       required: [true, "Furniture description is required"],
       trim: true,
+      minlength: [3, "Description must be at least 3 characters"],
     },
 
     category: {
@@ -45,18 +47,18 @@ const furnitureSchema = new Schema<IFurniture>(
     dimensions: {
       length: {
         type: Number,
-        required: true,
-        min: 0,
+        required: [true, "Length is required"],
+        min: [0.01, "Length must be greater than zero"],
       },
       width: {
         type: Number,
-        required: true,
-        min: 0,
+        required: [true, "Width is required"],
+        min: [0.01, "Width must be greater than zero"],
       },
       height: {
         type: Number,
-        required: true,
-        min: 0,
+        required: [true, "Height is required"],
+        min: [0.01, "Height must be greater than zero"],
       },
     },
 

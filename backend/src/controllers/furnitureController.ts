@@ -1,6 +1,41 @@
 
 import type { Request, Response } from "express";
+import mongoose from "mongoose";
 import Furniture from "../models/Furniture.js";
+
+const allowedCategories = [
+  "Chair",
+  "Table",
+  "Bed",
+  "Sofa",
+  "Cabinet",
+  "Other",
+];
+
+// Validate furniture dimensions
+const isValidDimensions = (dimensions: unknown): boolean => {
+  if (
+    typeof dimensions !== "object" ||
+    dimensions === null ||
+    Array.isArray(dimensions)
+  ) {
+    return false;
+  }
+
+  const values = dimensions as Record<string, unknown>;
+
+  return (
+    typeof values.length === "number" &&
+    Number.isFinite(values.length) &&
+    values.length > 0 &&
+    typeof values.width === "number" &&
+    Number.isFinite(values.width) &&
+    values.width > 0 &&
+    typeof values.height === "number" &&
+    Number.isFinite(values.height) &&
+    values.height > 0
+  );
+};
 
 // Create a furniture item
 export const createFurniture = async (
@@ -8,7 +43,42 @@ export const createFurniture = async (
   res: Response
 ): Promise<void> => {
   try {
-    const furniture = await Furniture.create(req.body);
+    const {
+      name,
+      description,
+      category,
+      basePrice,
+      dimensions,
+      isAvailable,
+    } = req.body;
+
+    if (
+      typeof name !== "string" ||
+      !name.trim() ||
+      typeof description !== "string" ||
+      !description.trim() ||
+      typeof category !== "string" ||
+      !allowedCategories.includes(category) ||
+      typeof basePrice !== "number" ||
+      !Number.isFinite(basePrice) ||
+      basePrice < 0 ||
+      !isValidDimensions(dimensions) ||
+      (isAvailable !== undefined && typeof isAvailable !== "boolean")
+    ) {
+      res.status(400).json({
+        message: "Please provide valid furniture details",
+      });
+      return;
+    }
+
+    const furniture = await Furniture.create({
+      name: name.trim(),
+      description: description.trim(),
+      category,
+      basePrice,
+      dimensions,
+      isAvailable: isAvailable ?? true,
+    });
 
     res.status(201).json({
       message: "Furniture created successfully",
@@ -51,7 +121,19 @@ export const getFurnitureById = async (
   res: Response
 ): Promise<void> => {
   try {
-    const furniture = await Furniture.findById(req.params.id);
+    const id = req.params.id;
+
+    if (
+      typeof id !== "string" ||
+      !mongoose.isValidObjectId(id)
+    ) {
+      res.status(400).json({
+        message: "Invalid furniture ID",
+      });
+      return;
+    }
+
+    const furniture = await Furniture.findById(id);
 
     if (!furniture) {
       res.status(404).json({
@@ -64,8 +146,8 @@ export const getFurnitureById = async (
   } catch (error) {
     console.error("Error fetching furniture:", error);
 
-    res.status(400).json({
-      message: "Invalid furniture ID",
+    res.status(500).json({
+      message: "Could not retrieve furniture",
     });
   }
 };
@@ -76,9 +158,116 @@ export const updateFurniture = async (
   res: Response
 ): Promise<void> => {
   try {
+    const id = req.params.id;
+
+    if (
+      typeof id !== "string" ||
+      !mongoose.isValidObjectId(id)
+    ) {
+      res.status(400).json({
+        message: "Invalid furniture ID",
+      });
+      return;
+    }
+
+    const updates = { ...req.body };
+
+    const allowedFields = [
+      "name",
+      "description",
+      "category",
+      "basePrice",
+      "dimensions",
+      "isAvailable",
+    ];
+
+    const suppliedFields = Object.keys(updates);
+
+    if (
+      suppliedFields.length === 0 ||
+      suppliedFields.some((field) => !allowedFields.includes(field))
+    ) {
+      res.status(400).json({
+        message: "Provide valid furniture fields to update",
+      });
+      return;
+    }
+
+    if (updates.name !== undefined) {
+      if (
+        typeof updates.name !== "string" ||
+        !updates.name.trim()
+      ) {
+        res.status(400).json({
+          message: "Furniture name cannot be empty",
+        });
+        return;
+      }
+
+      updates.name = updates.name.trim();
+    }
+
+    if (updates.description !== undefined) {
+      if (
+        typeof updates.description !== "string" ||
+        !updates.description.trim()
+      ) {
+        res.status(400).json({
+          message: "Furniture description cannot be empty",
+        });
+        return;
+      }
+
+      updates.description = updates.description.trim();
+    }
+
+    if (updates.category !== undefined) {
+      if (
+        typeof updates.category !== "string" ||
+        !allowedCategories.includes(updates.category)
+      ) {
+        res.status(400).json({
+          message: "Invalid furniture category",
+        });
+        return;
+      }
+    }
+
+    if (updates.basePrice !== undefined) {
+      if (
+        typeof updates.basePrice !== "number" ||
+        !Number.isFinite(updates.basePrice) ||
+        updates.basePrice < 0
+      ) {
+        res.status(400).json({
+          message: "Base price must be a valid non-negative number",
+        });
+        return;
+      }
+    }
+
+    if (updates.dimensions !== undefined) {
+      if (!isValidDimensions(updates.dimensions)) {
+        res.status(400).json({
+          message: "All furniture dimensions must be positive numbers",
+        });
+        return;
+      }
+    }
+
+    if (
+      updates.isAvailable !== undefined &&
+      typeof updates.isAvailable !== "boolean"
+    ) {
+      res.status(400).json({
+        message: "Availability must be true or false",
+      });
+      return;
+    }
+
     const furniture = await Furniture.findByIdAndUpdate(
-      req.params.id,
-      req.body,
+      id,
+      updates,
       {
         new: true,
         runValidators: true,
@@ -112,7 +301,19 @@ export const deleteFurniture = async (
   res: Response
 ): Promise<void> => {
   try {
-    const furniture = await Furniture.findByIdAndDelete(req.params.id);
+    const id = req.params.id;
+
+    if (
+      typeof id !== "string" ||
+      !mongoose.isValidObjectId(id)
+    ) {
+      res.status(400).json({
+        message: "Invalid furniture ID",
+      });
+      return;
+    }
+
+    const furniture = await Furniture.findByIdAndDelete(id);
 
     if (!furniture) {
       res.status(404).json({
@@ -127,8 +328,8 @@ export const deleteFurniture = async (
   } catch (error) {
     console.error("Error deleting furniture:", error);
 
-    res.status(400).json({
-      message: "Invalid furniture ID",
+    res.status(500).json({
+      message: "Could not delete furniture",
     });
   }
 };

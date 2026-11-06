@@ -1,6 +1,9 @@
+
 import type { Request, Response } from "express";
 import mongoose from "mongoose";
+
 import Payment from "../models/Payment.js";
+import Order from "../models/Order.js";
 
 // Create a new payment
 export const createPayment = async (
@@ -27,6 +30,16 @@ export const createPayment = async (
     ) {
       res.status(400).json({
         message: "Valid order, amount and payment method are required",
+      });
+      return;
+    }
+
+    // Check that the order exists
+    const orderExists = await Order.exists({ _id: order });
+
+    if (!orderExists) {
+      res.status(404).json({
+        message: "Order not found",
       });
       return;
     }
@@ -79,7 +92,19 @@ export const getPaymentById = async (
   res: Response
 ): Promise<void> => {
   try {
-    const payment = await Payment.findById(req.params.id).populate("order");
+    const id = req.params.id;
+
+    if (
+      typeof id !== "string" ||
+      !mongoose.isValidObjectId(id)
+    ) {
+      res.status(400).json({
+        message: "Invalid payment ID",
+      });
+      return;
+    }
+
+    const payment = await Payment.findById(id).populate("order");
 
     if (!payment) {
       res.status(404).json({
@@ -92,8 +117,8 @@ export const getPaymentById = async (
   } catch (error) {
     console.error("Error fetching payment:", error);
 
-    res.status(400).json({
-      message: "Invalid payment ID",
+    res.status(500).json({
+      message: "Could not retrieve payment",
     });
   }
 };
@@ -104,19 +129,76 @@ export const updatePayment = async (
   res: Response
 ): Promise<void> => {
   try {
+    const id = req.params.id;
+
+    if (
+      typeof id !== "string" ||
+      !mongoose.isValidObjectId(id)
+    ) {
+      res.status(400).json({
+        message: "Invalid payment ID",
+      });
+      return;
+    }
+
     const updates = { ...req.body };
 
     // Prevent changing the payment's creation date
     delete updates.paymentDate;
 
-    const payment = await Payment.findByIdAndUpdate(
-      req.params.id,
-      updates,
-      {
-        new: true,
-        runValidators: true,
+    // Validate updated order if provided
+    if (updates.order !== undefined) {
+      if (!mongoose.isValidObjectId(updates.order)) {
+        res.status(400).json({
+          message: "Invalid order ID",
+        });
+        return;
       }
-    ).populate("order");
+
+      const orderExists = await Order.exists({
+        _id: updates.order,
+      });
+
+      if (!orderExists) {
+        res.status(404).json({
+          message: "Order not found",
+        });
+        return;
+      }
+    }
+
+    // Validate updated amount if provided
+    if (updates.amount !== undefined) {
+      if (
+        typeof updates.amount !== "number" ||
+        !Number.isFinite(updates.amount) ||
+        updates.amount <= 0
+      ) {
+        res.status(400).json({
+          message: "Payment amount must be greater than zero",
+        });
+        return;
+      }
+    }
+
+    // Validate updated payment method if provided
+    if (updates.paymentMethod !== undefined) {
+      if (
+        !["Cash", "Bank Transfer", "Card", "Mobile Money"].includes(
+          updates.paymentMethod
+        )
+      ) {
+        res.status(400).json({
+          message: "Invalid payment method",
+        });
+        return;
+      }
+    }
+
+    const payment = await Payment.findByIdAndUpdate(id, updates, {
+      new: true,
+      runValidators: true,
+    }).populate("order");
 
     if (!payment) {
       res.status(404).json({
@@ -145,7 +227,19 @@ export const deletePayment = async (
   res: Response
 ): Promise<void> => {
   try {
-    const payment = await Payment.findByIdAndDelete(req.params.id);
+    const id = req.params.id;
+
+    if (
+      typeof id !== "string" ||
+      !mongoose.isValidObjectId(id)
+    ) {
+      res.status(400).json({
+        message: "Invalid payment ID",
+      });
+      return;
+    }
+
+    const payment = await Payment.findByIdAndDelete(id);
 
     if (!payment) {
       res.status(404).json({
@@ -160,8 +254,8 @@ export const deletePayment = async (
   } catch (error) {
     console.error("Error deleting payment:", error);
 
-    res.status(400).json({
-      message: "Invalid payment ID",
+    res.status(500).json({
+      message: "Could not delete payment",
     });
   }
 };

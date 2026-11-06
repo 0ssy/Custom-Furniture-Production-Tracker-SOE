@@ -1,8 +1,15 @@
+
 import mongoose, { Schema, Document } from "mongoose";
+
+export type ProductionStatus =
+  | "Not Started"
+  | "In Progress"
+  | "Completed"
+  | "On Hold";
 
 export interface IProduction extends Document {
   order: mongoose.Types.ObjectId;
-  productionStatus: string;
+  productionStatus: ProductionStatus;
   startDate?: Date;
   completionDate?: Date;
   notes?: string;

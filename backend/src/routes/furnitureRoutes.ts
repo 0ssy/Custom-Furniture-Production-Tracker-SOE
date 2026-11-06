@@ -1,4 +1,4 @@
-
+import { authorize } from "../middleware/authMiddleware.js";
 import express from "express";
 
 import {
@@ -24,6 +24,6 @@ router.get("/:id", getFurnitureById);
 router.put("/:id", updateFurniture);
 
 // Delete furniture
-router.delete("/:id", deleteFurniture);
+router.delete("/:id", authorize("Admin"), deleteFurniture);
 
 export default router;

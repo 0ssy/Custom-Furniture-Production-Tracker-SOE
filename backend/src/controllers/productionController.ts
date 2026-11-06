@@ -1,5 +1,9 @@
+
 import type { Request, Response } from "express";
+import mongoose from "mongoose";
+
 import Production from "../models/Production.js";
+import Order from "../models/Order.js";
 
 // Create production record
 export const createProduction = async (
@@ -7,12 +11,66 @@ export const createProduction = async (
   res: Response
 ): Promise<void> => {
   try {
-    const { order, productionStatus, startDate, completionDate, notes } =
-      req.body;
+    const {
+      order,
+      productionStatus,
+      startDate,
+      completionDate,
+      notes,
+    } = req.body;
 
-    if (!order) {
+    // Validate order reference
+    if (!order || !mongoose.isValidObjectId(order)) {
       res.status(400).json({
-        message: "Order reference is required",
+        message: "Valid order reference is required",
+      });
+      return;
+    }
+
+    // Check that the order exists
+    const orderExists = await Order.exists({ _id: order });
+
+    if (!orderExists) {
+      res.status(404).json({
+        message: "Order not found",
+      });
+      return;
+    }
+
+    // Validate dates
+    const parsedStartDate =
+      startDate !== undefined ? new Date(startDate) : undefined;
+
+    const parsedCompletionDate =
+      completionDate !== undefined ? new Date(completionDate) : undefined;
+
+    if (
+      parsedStartDate &&
+      Number.isNaN(parsedStartDate.getTime())
+    ) {
+      res.status(400).json({
+        message: "Invalid production start date",
+      });
+      return;
+    }
+
+    if (
+      parsedCompletionDate &&
+      Number.isNaN(parsedCompletionDate.getTime())
+    ) {
+      res.status(400).json({
+        message: "Invalid production completion date",
+      });
+      return;
+    }
+
+    if (
+      parsedStartDate &&
+      parsedCompletionDate &&
+      parsedCompletionDate < parsedStartDate
+    ) {
+      res.status(400).json({
+        message: "Completion date cannot be before the start date",
       });
       return;
     }
@@ -20,8 +78,8 @@ export const createProduction = async (
     const production = await Production.create({
       order,
       productionStatus,
-      startDate,
-      completionDate,
+      startDate: parsedStartDate,
+      completionDate: parsedCompletionDate,
       notes,
     });
 
@@ -66,9 +124,19 @@ export const getProductionById = async (
   res: Response
 ): Promise<void> => {
   try {
-    const production = await Production.findById(req.params.id).populate(
-      "order"
-    );
+    const id = req.params.id;
+
+    if (
+      typeof id !== "string" ||
+      !mongoose.isValidObjectId(id)
+    ) {
+      res.status(400).json({
+        message: "Invalid production record ID",
+      });
+      return;
+    }
+
+    const production = await Production.findById(id).populate("order");
 
     if (!production) {
       res.status(404).json({
@@ -81,8 +149,8 @@ export const getProductionById = async (
   } catch (error) {
     console.error("Error fetching production record:", error);
 
-    res.status(400).json({
-      message: "Invalid production record ID",
+    res.status(500).json({
+      message: "Could not retrieve production record",
     });
   }
 };
@@ -93,10 +161,94 @@ export const updateProduction = async (
   res: Response
 ): Promise<void> => {
   try {
+    const id = req.params.id;
+
+    if (
+      typeof id !== "string" ||
+      !mongoose.isValidObjectId(id)
+    ) {
+      res.status(400).json({
+        message: "Invalid production record ID",
+      });
+      return;
+    }
+
+    // Retrieve existing production record
+    const existingProduction = await Production.findById(id);
+
+    if (!existingProduction) {
+      res.status(404).json({
+        message: "Production record not found",
+      });
+      return;
+    }
+
     const updates = { ...req.body };
 
+    // Validate updated order reference
+    if (updates.order !== undefined) {
+      if (!mongoose.isValidObjectId(updates.order)) {
+        res.status(400).json({
+          message: "Invalid order ID",
+        });
+        return;
+      }
+
+      const orderExists = await Order.exists({
+        _id: updates.order,
+      });
+
+      if (!orderExists) {
+        res.status(404).json({
+          message: "Order not found",
+        });
+        return;
+      }
+    }
+
+    // Validate updated dates
+    let startDate = existingProduction.startDate;
+    let completionDate = existingProduction.completionDate;
+
+    if (updates.startDate !== undefined) {
+      startDate = new Date(updates.startDate);
+
+      if (Number.isNaN(startDate.getTime())) {
+        res.status(400).json({
+          message: "Invalid production start date",
+        });
+        return;
+      }
+
+      updates.startDate = startDate;
+    }
+
+    if (updates.completionDate !== undefined) {
+      completionDate = new Date(updates.completionDate);
+
+      if (Number.isNaN(completionDate.getTime())) {
+        res.status(400).json({
+          message: "Invalid production completion date",
+        });
+        return;
+      }
+
+      updates.completionDate = completionDate;
+    }
+
+    if (
+      startDate &&
+      completionDate &&
+      completionDate < startDate
+    ) {
+      res.status(400).json({
+        message: "Completion date cannot be before the start date",
+      });
+      return;
+    }
+
     const production = await Production.findByIdAndUpdate(
-      req.params.id,
+      id,
       updates,
       {
         new: true,
@@ -131,7 +283,19 @@ export const deleteProduction = async (
   res: Response
 ): Promise<void> => {
   try {
-    const production = await Production.findByIdAndDelete(req.params.id);
+    const id = req.params.id;
+
+    if (
+      typeof id !== "string" ||
+      !mongoose.isValidObjectId(id)
+    ) {
+      res.status(400).json({
+        message: "Invalid production record ID",
+      });
+      return;
+    }
+
+    const production = await Production.findByIdAndDelete(id);
 
     if (!production) {
       res.status(404).json({
@@ -146,8 +310,8 @@ export const deleteProduction = async (
   } catch (error) {
     console.error("Error deleting production record:", error);
 
-    res.status(400).json({
-      message: "Invalid production record ID",
+    res.status(500).json({
+      message: "Could not delete production record",
     });
   }
 };

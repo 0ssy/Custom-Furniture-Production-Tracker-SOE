@@ -1,8 +1,15 @@
+    import mongoose, { Schema, Document } from "mongoose";
 
-import mongoose, { Schema, Document } from "mongoose";
+    export type OrderStatus =
+    | "Pending"
+    | "Confirmed"
+    | "In Production"
+    | "Completed"
+    | "Delivered"
+    | "Cancelled";
 
-// Define the structure of an Order
-export interface IOrder extends Document {
+    // Define the structure of an Order
+    export interface IOrder extends Document {
     customer: mongoose.Types.ObjectId;
     items: {
         furniture: mongoose.Types.ObjectId;
@@ -10,14 +17,13 @@ export interface IOrder extends Document {
         unitPrice: number;
     }[];
     totalAmount: number;
-    orderStatus: string;
+    orderStatus: OrderStatus;
     orderDate: Date;
     expectedDeliveryDate: Date;
     }
 
-
-// Define the structure of individual order items
-const orderItemSchema = new Schema(
+    // Define the structure of individual order items
+    const orderItemSchema = new Schema(
     {
         furniture: {
         type: Schema.Types.ObjectId,
@@ -29,6 +35,10 @@ const orderItemSchema = new Schema(
         type: Number,
         required: [true, "Quantity is required"],
         min: [1, "Quantity must be at least 1"],
+        validate: {
+            validator: Number.isInteger,
+            message: "Quantity must be a whole number",
+        },
         },
 
         unitPrice: {
@@ -40,8 +50,8 @@ const orderItemSchema = new Schema(
     { _id: false }
     );
 
-// Create the Order schema
-const orderSchema = new Schema<IOrder>(
+    // Create the Order schema
+    const orderSchema = new Schema<IOrder>(
     {
         customer: {
         type: Schema.Types.ObjectId,
@@ -82,17 +92,17 @@ const orderSchema = new Schema<IOrder>(
         default: Date.now,
         },
 
-        expectedDeliveryDate: {
-        type: Date,
-        required: [true, "Expected delivery date is required"],
-        },
+expectedDeliveryDate: {
+  type: Date,
+  required: [true, "Expected delivery date is required"],
+},
     },
     {
         timestamps: true,
     }
     );
 
-// Create and export the Order model
-const Order = mongoose.model<IOrder>("Order", orderSchema);
+    // Create and export the Order model
+    const Order = mongoose.model<IOrder>("Order", orderSchema);
 
-export default Order;
+    export default Order;

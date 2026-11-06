@@ -1,4 +1,4 @@
-
+import { authorize } from "../middleware/authMiddleware.js";
 import express from "express";
 
 import {
@@ -24,6 +24,6 @@ router.get("/:id", getMaterialById);
 router.put("/:id", updateMaterial);
 
 // Delete material
-router.delete("/:id", deleteMaterial);
+router.delete("/:id", authorize("Admin"), deleteMaterial);
 
 export default router;
