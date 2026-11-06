@@ -98,3 +98,10 @@ Tested manually in the browser at `localhost:5173/payments`.
   count as the same code).
 - The balance is now kept exact for checks and rounded only when shown on screen,
   so a tiny amount owed can never be hidden.
+  - Amounts with more than 2 decimal places (like 0.004) are shown rounded to cents,
+  so the screen can differ slightly from the saved value. Real payments are in
+  whole shillings or cents, so this is not a problem in normal use.
+- Half-cent amounts such as 1.005 can show rounded down because of how computers
+  store decimals. Cosmetic only.
+- The backend does not yet check for duplicate M-Pesa codes. The form checks it,
+  but the backend should also enforce it. Raised with Jose.
