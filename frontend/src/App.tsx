@@ -8,11 +8,11 @@ import Furniture from './pages/Furniture'
 import Materials from './pages/Materials'
 import Production from './pages/Production'
 import Payments from './pages/Payments'
+import Deliveries from './pages/Deliveries'
 
 // All the routes of the system are listed here.
-// A route connects a web address (like /payments) to a page.
+// A route connects a web address (like /deliveries) to a page.
 // Every page sits inside <Layout>, so the sidebar shows on all of them.
-// The placeholder pages will be replaced one by one as we build each feature.
 function App() {
   return (
     <Routes>
@@ -23,9 +23,9 @@ function App() {
         <Route path="/furniture" element={<Furniture />} />
         <Route path="/materials" element={<Materials />} />
         <Route path="/production" element={<Production />} />
-        {/* Payments is now a real page, not a placeholder */}
         <Route path="/payments" element={<Payments />} />
-        <Route path="/deliveries" element={<PagePlaceholder title="Deliveries" />} />
+        {/* Deliveries is now a real page, not a placeholder */}
+        <Route path="/deliveries" element={<Deliveries />} />
         <Route path="/reports" element={<PagePlaceholder title="Reports" />} />
       </Route>
     </Routes>
