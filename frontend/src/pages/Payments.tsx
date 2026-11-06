@@ -7,6 +7,13 @@ import { mockCustomers } from '../data/mockCustomers'
 import { getToday } from '../utils/date'
 import PaymentForm from '../components/PaymentForm'
 
+// Rounds an amount to 2 decimals and adds commas, for showing on screen only.
+// Rounding also removes errors like 0.30000000000000004.
+// The checks (is anything still owed?) always use the exact numbers instead.
+function showMoney(amount: number) {
+  return (Math.round(amount * 100) / 100).toLocaleString()
+}
+
 function Payments() {
   // The payments shown in the history table. Starts with the fake data.
   const [payments, setPayments] = useState<Payment[]>(mockPayments)
@@ -50,12 +57,13 @@ function Payments() {
       .reduce((sum, p) => sum + p.amount, 0)
   }
 
-  // How much is still owed on an order: total price minus what was paid.
-  // The rounding stops tiny decimal errors like 0.30000000000000004.
+  // Exact balance: total price minus what was paid.
+  // It is NOT rounded here, because rounding could hide a tiny amount
+  // that is still owed. Rounding is done only when showing it (showMoney).
   function getBalance(orderId: string) {
     const order = orders.find((o) => o._id === orderId)
     if (!order) return 0
-    return Math.round((order.totalAmount - getPaid(orderId)) * 100) / 100
+    return order.totalAmount - getPaid(orderId)
   }
 
   // Totals for the three summary cards at the top
@@ -65,6 +73,12 @@ function Payments() {
 
   // Orders that still owe money (used for the form dropdown)
   const ordersWithBalance = orders.filter((o) => getBalance(o._id) > 0)
+
+  // All M-Pesa codes already recorded, in capital letters,
+  // so "skl4f7g2qw" and "SKL4F7G2QW" count as the same code.
+  const existingReferences = payments
+    .filter((p) => p.method === 'M-Pesa')
+    .map((p) => p.reference.toUpperCase())
 
   // Keep only the orders that match BOTH the search text and the status filter.
   // The search checks the customer's name OR the furniture type.
@@ -132,16 +146,16 @@ function Payments() {
       <div className="grid grid-cols-3 gap-4 mb-4">
         <div className="bg-white p-4 rounded shadow">
           <p className="text-gray-500">Total Billed (KES)</p>
-          <p className="text-2xl font-bold">{totalBilled.toLocaleString()}</p>
+          <p className="text-2xl font-bold">{showMoney(totalBilled)}</p>
         </div>
         <div className="bg-white p-4 rounded shadow">
           <p className="text-gray-500">Total Received (KES)</p>
-          <p className="text-2xl font-bold">{totalReceived.toLocaleString()}</p>
+          <p className="text-2xl font-bold">{showMoney(totalReceived)}</p>
         </div>
         <div className="bg-white p-4 rounded shadow">
           <p className="text-gray-500">Outstanding (KES)</p>
           <p className="text-2xl font-bold text-red-600">
-            {totalOutstanding.toLocaleString()}
+            {showMoney(totalOutstanding)}
           </p>
         </div>
       </div>
@@ -155,6 +169,7 @@ function Payments() {
           getOrderLabel={getOrderLabel}
           getBalance={getBalance}
           today={today}
+          existingReferences={existingReferences}
           onSave={handleSave}
           onCancel={() => {
             setShowForm(false)
@@ -206,12 +221,13 @@ function Payments() {
             return (
               <tr key={o._id} className="border-t">
                 <td className="p-2">{getOrderLabel(o._id)}</td>
-                <td className="p-2">{o.totalAmount.toLocaleString()}</td>
-                <td className="p-2">{paid.toLocaleString()}</td>
-                <td className="p-2">{balance.toLocaleString()}</td>
+                <td className="p-2">{showMoney(o.totalAmount)}</td>
+                <td className="p-2">{showMoney(paid)}</td>
+                <td className="p-2">{showMoney(balance)}</td>
                 <td className={`p-2 ${statusClass(status)}`}>{status}</td>
                 <td className="p-2">
-                  {/* Disabled when there is nothing left to pay */}
+                  {/* Disabled when there is nothing left to pay.
+                      This uses the exact balance, not the rounded one. */}
                   <button
                     onClick={() => handleRowClick(o._id)}
                     disabled={balance <= 0}
@@ -248,7 +264,7 @@ function Payments() {
             <tr key={p._id} className="border-t">
               <td className="p-2">{p.paymentDate}</td>
               <td className="p-2">{getOrderLabel(p.orderId)}</td>
-              <td className="p-2">{p.amount.toLocaleString()}</td>
+              <td className="p-2">{showMoney(p.amount)}</td>
               <td className="p-2">{p.method}</td>
               <td className="p-2">{p.reference || '-'}</td>
             </tr>

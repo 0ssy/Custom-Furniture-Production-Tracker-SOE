@@ -22,7 +22,7 @@ It uses mock data for now because the backend is not finished yet.
 | `orderId` | The `_id` of the order being paid for |
 | `amount` | Amount paid in KES (above 0, not more than the balance) |
 | `method` | Cash, M-Pesa or Bank Transfer |
-| `reference` | M-Pesa code or bank reference (required for M-Pesa) |
+| `reference` | M-Pesa code or bank reference (required and unique for M-Pesa) |
 | `paymentDate` | Day the money was received (not in the future) |
 
 ## How it works
@@ -30,15 +30,18 @@ It uses mock data for now because the backend is not finished yet.
 order is the sum of all its payments. The balance is the order total minus the
 amount paid. The status is Unpaid when nothing is paid, Paid when the balance
 is zero, and Partial in between. None of these three are typed in or stored,
-they are worked out every time the page is drawn. Cancelled orders are left
-out. The Record Payment button on a row opens the form with that order already
-chosen, and is disabled when the balance is zero. Payments cannot be edited or
-deleted, because changing a money record afterwards is bad practice.
+they are worked out every time the page is drawn. The balance is kept exact for
+all checks and rounded to 2 decimals only when shown on screen. Cancelled
+orders are left out. The Record Payment button on a row opens the form with
+that order already chosen, and is disabled when the balance is zero. Payments
+cannot be edited or deleted, because changing a money record afterwards is bad
+practice. An M-Pesa code that was already recorded is rejected, whether it is
+typed in capital or small letters.
 
 ## Validation rules
 - Order: must be chosen
 - Amount: a number above 0, and not more than the balance of the order
-- Reference: required when the method is M-Pesa
+- Reference: required when the method is M-Pesa, and must not be a code already recorded
 - Payment date: required, and not in the future
 
 ## How it was tested
@@ -63,6 +66,8 @@ Tested manually in the browser at `localhost:5173/payments`.
 | Check record payment | TC15: Record a partial payment | Form is open | 1. Choose the Wardrobe order<br>2. Type the amount<br>3. Keep Cash<br>4. Click Save Payment | Order: Wardrobe<br>Amount: `20000`<br>Method: Cash | Wardrobe shows Paid 20,000, Balance 25,000, status Partial. A new row shows in history. Received becomes 103,000 and Outstanding 70,000 | The row, history and cards updated as expected | Pass |
 | Check record payment | TC16: Pay the remaining balance | TC15 was done | 1. Click Record Payment on the Wardrobe row<br>2. Type the amount<br>3. Click Save Payment | Amount: `25000` | Wardrobe shows Balance 0 and status Paid, and its button is greyed out | Status changed to Paid and the button was greyed out | Pass |
 | Check cancel | TC17: Cancel the form | Form is open | 1. Type something in an input<br>2. Click Cancel | Any text | Form closes, nothing changes | Form closed, no changes | Pass |
+| Check form validation | TC18: Repeat an M-Pesa code | Form is open | 1. Choose the Wardrobe order<br>2. Type the amount<br>3. Choose M-Pesa<br>4. Type an existing code<br>5. Click Save Payment | Amount: `5000`<br>Reference: `SKL4F7G2QW` | "This M-Pesa code is already recorded" shows, nothing is saved | The duplicate code error was shown, nothing was saved | Pass |
+| Check form validation | TC19: Repeat an M-Pesa code in small letters | Form is open | 1. Same steps as TC18<br>2. Type the code in small letters | Reference: `skl4f7g2qw` | The same duplicate error shows | The duplicate code error was shown, nothing was saved | Pass |
 
 ## Known issues / to do
 - Data resets to the 3 mock payments when the page is refreshed or when the user
@@ -75,9 +80,21 @@ Tested manually in the browser at `localhost:5173/payments`.
   backend once Jose confirms.
 - Orders and customers come from the original mock lists, so ones added on
   other pages do not appear here until we use the real backend.
+- Cancelling an order on the Orders page does not hide it here, because each page
+  has its own mock data. This is solved once all pages use the backend.
 - Cancelled orders are hidden. If a customer paid a deposit before cancelling,
   the refund is not tracked.
+- Payment history shows same-day payments in the order they were recorded, not
+  newest first. A creation time from the backend can fix this.
+- A payment form left open past midnight uses the date from when the page last
+  drew. Very rare, and not handled.
 - `crypto.randomUUID()` only works on `localhost` or HTTPS. This goes away when
   the backend creates the ids.
 - Replace the mock data with real API calls once the backend is ready.
 - Confirm the field names with Jose (backend developer).
+
+## Fixes made after code review
+- The same M-Pesa code can no longer be recorded twice (capital and small letters
+  count as the same code).
+- The balance is now kept exact for checks and rounded only when shown on screen,
+  so a tiny amount owed can never be hidden.

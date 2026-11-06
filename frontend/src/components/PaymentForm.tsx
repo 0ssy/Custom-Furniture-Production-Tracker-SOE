@@ -5,19 +5,22 @@ import { PAYMENT_METHODS } from '../types/payment'
 import type { Order } from '../types/order'
 
 // Props are the things the parent page (Payments.tsx) gives to this form.
-// initialOrderId:  order to pre-select ('' means none chosen yet).
-// availableOrders: orders that still have a balance (used for the dropdown).
-// getOrderLabel:   turns an order id into text like "Mary Wanjiku - Wardrobe (x1)".
-// getBalance:      gives how much is still owed on an order.
-// today:           today's date. A payment cannot be dated in the future.
-// onSave:          runs when the form is valid. It gets the data without _id.
-// onCancel:        runs when Cancel is clicked.
+// initialOrderId:     order to pre-select ('' means none chosen yet).
+// availableOrders:    orders that still have a balance (used for the dropdown).
+// getOrderLabel:      turns an order id into text like "Mary Wanjiku - Wardrobe (x1)".
+// getBalance:         gives the exact amount still owed on an order.
+// today:              today's date. A payment cannot be dated in the future.
+// existingReferences: M-Pesa codes already recorded (in capital letters),
+//                     used to stop the same code being entered twice.
+// onSave:             runs when the form is valid. It gets the data without _id.
+// onCancel:           runs when Cancel is clicked.
 type Props = {
   initialOrderId: string
   availableOrders: Order[]
   getOrderLabel: (orderId: string) => string
   getBalance: (orderId: string) => number
   today: string
+  existingReferences: string[]
   onSave: (data: Omit<Payment, '_id'>) => void
   onCancel: () => void
 }
@@ -30,12 +33,19 @@ type FormErrors = {
   paymentDate?: string
 }
 
+// Rounds an amount to 2 decimals and adds commas, for showing on screen only.
+// The checks below always use the exact balance, never this rounded one.
+function showMoney(amount: number) {
+  return (Math.round(amount * 100) / 100).toLocaleString()
+}
+
 function PaymentForm({
   initialOrderId,
   availableOrders,
   getOrderLabel,
   getBalance,
   today,
+  existingReferences,
   onSave,
   onCancel,
 }: Props) {
@@ -65,15 +75,25 @@ function PaymentForm({
     if (amount.trim() === '' || !Number.isFinite(amountNumber) || amountNumber <= 0) {
       newErrors.amount = 'Amount must be a number greater than 0'
     } else if (orderId !== '' && amountNumber > getBalance(orderId)) {
-      // The customer cannot pay more than what is still owed
-      newErrors.amount = `Amount cannot be more than the balance (${getBalance(
-        orderId
-      ).toLocaleString()})`
+      // The customer cannot pay more than what is still owed.
+      // We compare with the exact balance, and only round the number
+      // that is shown in the message.
+      newErrors.amount = `Amount cannot be more than the balance (${showMoney(
+        getBalance(orderId)
+      )})`
     }
 
-    // M-Pesa payments must have the M-Pesa code
-    if (method === 'M-Pesa' && reference.trim() === '') {
-      newErrors.reference = 'Please enter the M-Pesa code'
+    // M-Pesa payments must have the M-Pesa code, and the code must be new.
+    // Every real M-Pesa transaction has its own code, so the same code
+    // twice means the payment was already recorded.
+    // toUpperCase makes "skl4f7g2qw" and "SKL4F7G2QW" count as the same code.
+    if (method === 'M-Pesa') {
+      const code = reference.trim().toUpperCase()
+      if (code === '') {
+        newErrors.reference = 'Please enter the M-Pesa code'
+      } else if (existingReferences.includes(code)) {
+        newErrors.reference = 'This M-Pesa code is already recorded'
+      }
     }
 
     // The date is required and cannot be in the future.
@@ -128,7 +148,7 @@ function PaymentForm({
           {/* Show how much is still owed once an order is chosen */}
           {orderId !== '' && (
             <p className="text-sm text-gray-600">
-              Balance: KES {getBalance(orderId).toLocaleString()}
+              Balance: KES {showMoney(getBalance(orderId))}
             </p>
           )}
           {errors.orderId && <p className="text-red-600 text-sm">{errors.orderId}</p>}
