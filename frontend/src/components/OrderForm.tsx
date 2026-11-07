@@ -1,90 +1,136 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import type { Order, OrderStatus } from '../types/order'
+import type { ApiOrder, OrderFormData, OrderStatus } from '../types/order'
 import { ORDER_STATUSES } from '../types/order'
-import type { Customer } from '../types/customer'
-
-// The furniture types shown in the dropdown.
-const FURNITURE_TYPES = [
-  'Wardrobe',
-  'Bed',
-  'Sofa',
-  'Dining Table',
-  'Chair',
-  'Cabinet',
-  'Other',
-]
+import type { ApiCustomer } from '../types/customer'
+import type { ApiFurniture } from '../types/furniture'
+import { getToday } from '../utils/date'
 
 // Props are the things the parent page (Orders.tsx) gives to this form.
 // order:     if it has an order we are EDITING, if null we are ADDING.
-// customers: the list used to fill the customer dropdown.
-// onSave:    runs when the form is valid and Save is clicked.
-//            It gets the data without _id and createdAt (the system makes those).
-// onCancel:  runs when Cancel is clicked.
+// customers: used to fill the customer dropdown.
+// furniture: the available furniture, used to fill the item dropdowns.
+// saving:    true while the backend is busy.
 type Props = {
-  order: Order | null
-  customers: Customer[]
-  onSave: (data: Omit<Order, '_id' | 'createdAt'>) => void
+  order: ApiOrder | null
+  customers: ApiCustomer[]
+  furniture: ApiFurniture[]
+  saving: boolean
+  onSave: (data: OrderFormData) => void
   onCancel: () => void
 }
 
-// Shape of the error messages. "?" means each one is optional
-// because most of the time there is no error.
-type FormErrors = {
-  customerId?: string
-  furnitureType?: string
-  quantity?: string
-  totalAmount?: string
+// One line of the order while the user is typing.
+// Numbers are kept as text until we save. "key" lets React tell the rows apart.
+type Row = {
+  key: number
+  furniture: string
+  quantity: string
+  unitPrice: string
 }
 
-function OrderForm({ order, customers, onSave, onCancel }: Props) {
-  // One state for each input. When editing we start with the order's
-  // current values, when adding we start empty (or with a default).
-  const [customerId, setCustomerId] = useState(order?.customerId ?? '')
-  const [furnitureType, setFurnitureType] = useState(order?.furnitureType ?? '')
-  // quantity and totalAmount are kept as text while typing,
-  // and changed into numbers only when saving.
-  const [quantity, setQuantity] = useState(order ? String(order.quantity) : '1')
-  const [totalAmount, setTotalAmount] = useState(
-    order ? String(order.totalAmount) : ''
-  )
-  const [specifications, setSpecifications] = useState(order?.specifications ?? '')
-  const [status, setStatus] = useState<OrderStatus>(order?.status ?? 'Pending')
+// Shape of the error messages. "?" means each one is optional.
+type FormErrors = {
+  customer?: string
+  date?: string
+}
 
-  // Error messages shown under the inputs. Starts empty.
+// True if the text is a real number above 0 (rejects NaN and Infinity)
+function isPositive(text: string) {
+  const n = Number(text)
+  return text.trim() !== '' && Number.isFinite(n) && n > 0
+}
+
+function OrderForm({ order, customers, furniture, saving, onSave, onCancel }: Props) {
+  // Used when ADDING: the chosen customer and the item rows
+  const [customerId, setCustomerId] = useState('')
+  const [rows, setRows] = useState<Row[]>([
+    { key: 1, furniture: '', quantity: '1', unitPrice: '' },
+  ])
+  // The key to give the next row we add
+  const [nextKey, setNextKey] = useState(2)
+
+  // Used for both: the delivery date (first 10 characters of the date text)
+  // and the status. A new order always starts as Pending.
+  const [expectedDeliveryDate, setExpectedDeliveryDate] = useState(
+    order ? order.expectedDeliveryDate.slice(0, 10) : ''
+  )
+  const [orderStatus, setOrderStatus] = useState<OrderStatus>(
+    order?.orderStatus ?? 'Pending'
+  )
+
+  // Error messages. "rowErrors" is keyed by the row's key.
   const [errors, setErrors] = useState<FormErrors>({})
+  const [rowErrors, setRowErrors] = useState<Record<number, string>>({})
+
+  // Changes one row. Example: updateRow(2, { quantity: '3' })
+  function updateRow(key: number, changes: Partial<Row>) {
+    setRows(rows.map((r) => (r.key === key ? { ...r, ...changes } : r)))
+  }
+
+  // When furniture is chosen, fill the unit price with its base price
+  function handleFurnitureChange(key: number, furnitureId: string) {
+    const item = furniture.find((f) => f._id === furnitureId)
+    updateRow(key, {
+      furniture: furnitureId,
+      unitPrice: item ? String(item.basePrice) : '',
+    })
+  }
+
+  function addRow() {
+    setRows([...rows, { key: nextKey, furniture: '', quantity: '1', unitPrice: '' }])
+    setNextKey(nextKey + 1)
+  }
+
+  function removeRow(key: number) {
+    setRows(rows.filter((r) => r.key !== key))
+  }
+
+  // Live total shown to the user. The backend calculates the real one.
+  const total = rows.reduce((sum, r) => {
+    const q = Number(r.quantity)
+    const p = Number(r.unitPrice)
+    return Number.isFinite(q) && Number.isFinite(p) ? sum + q * p : sum
+  }, 0)
 
   // Checks every input. Returns true if all is fine.
   function validate() {
     const newErrors: FormErrors = {}
+    const newRowErrors: Record<number, string> = {}
+    const today = getToday()
 
-    // A customer must be chosen
-    if (customerId === '') {
-      newErrors.customerId = 'Please choose a customer'
+    if (!order) {
+      if (customerId === '') newErrors.customer = 'Please choose a customer'
+
+      // Check every item row
+      for (const r of rows) {
+        const q = Number(r.quantity)
+        if (r.furniture === '') {
+          newRowErrors[r.key] = 'Please choose a furniture item'
+        } else if (r.quantity.trim() === '' || !Number.isInteger(q) || q < 1) {
+          newRowErrors[r.key] = 'Quantity must be a whole number of 1 or more'
+        } else if (!isPositive(r.unitPrice)) {
+          newRowErrors[r.key] = 'Unit price must be a number above 0'
+        }
+      }
     }
 
-    // A furniture type must be chosen
-    if (furnitureType === '') {
-      newErrors.furnitureType = 'Please choose a furniture type'
-    }
-
-    // Quantity must be a whole number of 1 or more.
-    // Number.isInteger checks there is no decimal like 1.5
-    const qty = Number(quantity)
-    if (quantity.trim() === '' || !Number.isInteger(qty) || qty < 1) {
-      newErrors.quantity = 'Quantity must be a whole number of 1 or more'
-    }
-
-    // Total amount must be a real number bigger than 0.
-    // Number.isFinite rejects NaN and Infinity (for example typing 1e999),
-    // so it replaces the old isNaN check.
-    const amount = Number(totalAmount)
-    if (totalAmount.trim() === '' || !Number.isFinite(amount) || amount <= 0) {
-      newErrors.totalAmount = 'Amount must be a number greater than 0'
+    // Dates like 2026-11-10 can be compared as plain text
+    // because the year comes first, then the month, then the day.
+    if (expectedDeliveryDate === '') {
+      newErrors.date = 'Expected delivery date is required'
+    } else if (!order && expectedDeliveryDate <= today) {
+      // The backend rejects a date that is not in the future
+      newErrors.date = 'Delivery date must be after today'
+    } else if (order && expectedDeliveryDate <= order.orderDate.slice(0, 10)) {
+      newErrors.date = 'Delivery date must be after the order date'
     }
 
     setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
+    setRowErrors(newRowErrors)
+    return (
+      Object.keys(newErrors).length === 0 && Object.keys(newRowErrors).length === 0
+    )
   }
 
   // Runs when the user clicks Save
@@ -92,126 +138,151 @@ function OrderForm({ order, customers, onSave, onCancel }: Props) {
     e.preventDefault() // stops the browser from reloading the page
     if (!validate()) return // something is wrong, so do not save
 
-    // Everything is fine. Change the text into real numbers
-    // and send the data to the parent page.
     onSave({
-      customerId,
-      furnitureType,
-      quantity: Number(quantity),
-      totalAmount: Number(totalAmount),
-      specifications: specifications.trim(),
-      status,
+      customer: customerId,
+      items: rows.map((r) => ({
+        furniture: r.furniture,
+        quantity: Number(r.quantity),
+        unitPrice: Number(r.unitPrice),
+      })),
+      expectedDeliveryDate,
+      orderStatus,
     })
   }
 
   return (
     <form onSubmit={handleSubmit} className="bg-white p-4 rounded shadow mb-4">
-      {/* Title changes depending on whether we are editing or adding */}
-      <h3 className="text-lg font-bold mb-3">
-        {order ? 'Edit Order' : 'Add Order'}
-      </h3>
+      <h3 className="text-lg font-bold mb-3">{order ? 'Edit Order' : 'Add Order'}</h3>
 
       <div className="grid grid-cols-2 gap-3">
-        {/* Customer dropdown */}
+        {/* Customer: dropdown when adding, plain text when editing */}
         <div>
           <label className="block text-sm mb-1">Customer *</label>
-          <select
-            className="w-full border rounded px-2 py-1"
-            value={customerId}
-            onChange={(e) => setCustomerId(e.target.value)}
-          >
-            <option value="">-- Choose customer --</option>
-            {/* One option for each customer. value is the id, text is the name */}
-            {customers.map((c) => (
-              <option key={c._id} value={c._id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-          {errors.customerId && (
-            <p className="text-red-600 text-sm">{errors.customerId}</p>
+          {order ? (
+            <p className="border rounded px-2 py-1 bg-gray-100">
+              {order.customer?.fullName ?? 'Unknown customer'}
+            </p>
+          ) : (
+            <select
+              className="w-full border rounded px-2 py-1"
+              value={customerId}
+              onChange={(e) => setCustomerId(e.target.value)}
+            >
+              <option value="">-- Choose customer --</option>
+              {customers.map((c) => (
+                <option key={c._id} value={c._id}>
+                  {c.fullName}
+                </option>
+              ))}
+            </select>
           )}
+          {errors.customer && <p className="text-red-600 text-sm">{errors.customer}</p>}
         </div>
 
-        {/* Furniture type dropdown */}
+        {/* Expected delivery date. type="date" shows a calendar picker */}
         <div>
-          <label className="block text-sm mb-1">Furniture Type *</label>
-          <select
-            className="w-full border rounded px-2 py-1"
-            value={furnitureType}
-            onChange={(e) => setFurnitureType(e.target.value)}
-          >
-            <option value="">-- Choose type --</option>
-            {FURNITURE_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-          {errors.furnitureType && (
-            <p className="text-red-600 text-sm">{errors.furnitureType}</p>
-          )}
-        </div>
-
-        {/* Quantity input */}
-        <div>
-          <label className="block text-sm mb-1">Quantity *</label>
+          <label className="block text-sm mb-1">Expected Delivery Date *</label>
           <input
+            type="date"
             className="w-full border rounded px-2 py-1"
-            value={quantity}
-            onChange={(e) => setQuantity(e.target.value)}
+            value={expectedDeliveryDate}
+            onChange={(e) => setExpectedDeliveryDate(e.target.value)}
           />
-          {errors.quantity && (
-            <p className="text-red-600 text-sm">{errors.quantity}</p>
-          )}
+          {errors.date && <p className="text-red-600 text-sm">{errors.date}</p>}
         </div>
 
-        {/* Total amount input */}
-        <div>
-          <label className="block text-sm mb-1">Total Amount (KES) *</label>
-          <input
-            className="w-full border rounded px-2 py-1"
-            value={totalAmount}
-            onChange={(e) => setTotalAmount(e.target.value)}
-          />
-          {errors.totalAmount && (
-            <p className="text-red-600 text-sm">{errors.totalAmount}</p>
-          )}
-        </div>
-
-        {/* Status dropdown, filled from the list in types/order.ts */}
-        <div>
-          <label className="block text-sm mb-1">Status</label>
-          <select
-            className="w-full border rounded px-2 py-1"
-            value={status}
-            onChange={(e) => setStatus(e.target.value as OrderStatus)}
-          >
-            {ORDER_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Specifications input (optional) */}
-        <div>
-          <label className="block text-sm mb-1">Specifications</label>
-          <input
-            className="w-full border rounded px-2 py-1"
-            placeholder="Size, colour, material..."
-            value={specifications}
-            onChange={(e) => setSpecifications(e.target.value)}
-          />
-        </div>
+        {/* Status: only when editing. New orders always start as Pending. */}
+        {order && (
+          <div>
+            <label className="block text-sm mb-1">Status</label>
+            <select
+              className="w-full border rounded px-2 py-1"
+              value={orderStatus}
+              onChange={(e) => setOrderStatus(e.target.value as OrderStatus)}
+            >
+              {ORDER_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
+
+      {/* Items */}
+      <h4 className="font-bold mt-4 mb-2">Items</h4>
+
+      {order ? (
+        // Editing: the items cannot be changed, so we only list them
+        <ul className="list-disc ml-6 mb-2">
+          {order.items.map((item, index) => (
+            <li key={index}>
+              {item.furniture?.name ?? 'Deleted item'} x{item.quantity} at{' '}
+              {item.unitPrice.toLocaleString()} each
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <>
+          {rows.map((r) => (
+            <div key={r.key} className="mb-3">
+              <div className="grid grid-cols-12 gap-2 items-center">
+                <select
+                  className="col-span-6 border rounded px-2 py-1"
+                  value={r.furniture}
+                  onChange={(e) => handleFurnitureChange(r.key, e.target.value)}
+                >
+                  <option value="">-- Choose furniture --</option>
+                  {furniture.map((f) => (
+                    <option key={f._id} value={f._id}>
+                      {f.name} ({f.basePrice.toLocaleString()})
+                    </option>
+                  ))}
+                </select>
+                <input
+                  className="col-span-2 border rounded px-2 py-1"
+                  placeholder="Qty"
+                  value={r.quantity}
+                  onChange={(e) => updateRow(r.key, { quantity: e.target.value })}
+                />
+                <input
+                  className="col-span-3 border rounded px-2 py-1"
+                  placeholder="Unit price"
+                  value={r.unitPrice}
+                  onChange={(e) => updateRow(r.key, { unitPrice: e.target.value })}
+                />
+                {/* An order needs at least one item, so the last row cannot be removed */}
+                <button
+                  type="button"
+                  onClick={() => removeRow(r.key)}
+                  disabled={rows.length === 1}
+                  className="col-span-1 text-red-600 disabled:text-gray-300"
+                >
+                  X
+                </button>
+              </div>
+              {rowErrors[r.key] && (
+                <p className="text-red-600 text-sm">{rowErrors[r.key]}</p>
+              )}
+            </div>
+          ))}
+
+          <button type="button" onClick={addRow} className="text-amber-700 underline">
+            + Add another item
+          </button>
+          <p className="mt-2 font-bold">Total: KES {total.toLocaleString()}</p>
+        </>
+      )}
 
       {/* Buttons */}
       <div className="mt-4 flex gap-2">
-        {/* type="submit" makes this button trigger handleSubmit */}
-        <button type="submit" className="bg-amber-600 text-white px-4 py-1 rounded">
-          Save
+        <button
+          type="submit"
+          disabled={saving}
+          className="bg-amber-600 text-white px-4 py-1 rounded disabled:bg-gray-300"
+        >
+          {saving ? 'Saving...' : 'Save'}
         </button>
         {/* type="button" so Cancel does NOT submit the form */}
         <button

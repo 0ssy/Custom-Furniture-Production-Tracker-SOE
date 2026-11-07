@@ -1,88 +1,145 @@
-import { useState } from 'react'
-import type { Order } from '../types/order'
+import { useCallback, useEffect, useState } from 'react'
+import type { ApiOrder, OrderFormData } from '../types/order'
 import { ORDER_STATUSES } from '../types/order'
-import { mockOrders } from '../data/mockOrders'
-import { mockCustomers } from '../data/mockCustomers'
+import type { ApiCustomer } from '../types/customer'
+import type { ApiFurniture } from '../types/furniture'
+import { apiFetch } from '../services/api'
+import { extractList } from '../services/list'
+import { useAuth } from '../context/AuthContext'
 import OrderForm from '../components/OrderForm'
 
+// Turns the items of an order into text like "Queen Bed x2, Office Chair x1"
+function itemsText(order: ApiOrder) {
+  return order.items
+    .map((i) => `${i.furniture?.name ?? 'Deleted item'} x${i.quantity}`)
+    .join(', ')
+}
+
 function Orders() {
-  // The list of orders shown in the table. Starts with the fake data.
-  const [orders, setOrders] = useState<Order[]>(mockOrders)
+  // Only an Admin sees Delete, because the backend only lets Admins delete
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'Admin'
 
-  // The customers used for the dropdown and to show names in the table.
-  // NOTE: this is the original mock list, so customers added on the
-  // Customers page will not show here until we use the real backend.
-  const customers = mockCustomers
+  // Everything now comes from the database
+  const [orders, setOrders] = useState<ApiOrder[]>([])
+  const [customers, setCustomers] = useState<ApiCustomer[]>([])
+  const [furniture, setFurniture] = useState<ApiFurniture[]>([])
 
-  // Text typed in the search box
+  // true while loading, and the error text if loading fails
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+
+  // Search text and status filter ('' means all statuses)
   const [search, setSearch] = useState('')
-
-  // The status chosen in the filter. '' means show all statuses.
   const [statusFilter, setStatusFilter] = useState('')
 
-  // true = form visible, false = form hidden
+  // Form state
   const [showForm, setShowForm] = useState(false)
+  const [editing, setEditing] = useState<ApiOrder | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [actionError, setActionError] = useState('')
 
-  // Which order are we editing? null means we are adding a new one.
-  const [editing, setEditing] = useState<Order | null>(null)
+  // Gets orders, customers and furniture at the same time.
+  // Promise.all waits until all three answers are back.
+  const loadAll = useCallback(async () => {
+    try {
+      const [ordersData, customersData, furnitureData] = await Promise.all([
+        apiFetch<unknown>('/orders'),
+        apiFetch<unknown>('/customers'),
+        apiFetch<unknown>('/furniture'),
+      ])
+      setOrders(extractList<ApiOrder>(ordersData, 'orders'))
+      setCustomers(extractList<ApiCustomer>(customersData, 'customers'))
+      setFurniture(extractList<ApiFurniture>(furnitureData, 'furniture'))
+      setLoadError('')
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Could not load orders')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
-  // An order only stores the customerId, so this finds the customer's name.
-  // If the customer is not found we show "Unknown".
-  function getCustomerName(customerId: string) {
-    const customer = customers.find((c) => c._id === customerId)
-    return customer ? customer.name : 'Unknown'
-  }
+  // Load once, when the page opens
+  useEffect(() => {
+    loadAll()
+  }, [loadAll])
 
-  // Keep only the orders that match BOTH the search text and the status filter.
-  // The search checks the customer's name OR the furniture type.
+  // Only furniture marked as available can be ordered
+  const availableFurniture = furniture.filter((f) => f.isAvailable)
+
+  // Keep only orders that match BOTH the search and the status filter.
+  // The search checks the customer's name OR the furniture names.
   const filtered = orders.filter((o) => {
     const text = search.toLowerCase()
     const matchesSearch =
-      getCustomerName(o.customerId).toLowerCase().includes(text) ||
-      o.furnitureType.toLowerCase().includes(text)
-    // If no status is chosen, every order passes this check
-    const matchesStatus = statusFilter === '' || o.status === statusFilter
+      (o.customer?.fullName ?? '').toLowerCase().includes(text) ||
+      itemsText(o).toLowerCase().includes(text)
+    const matchesStatus = statusFilter === '' || o.orderStatus === statusFilter
     return matchesSearch && matchesStatus
   })
 
-  // Runs when "+ Add Order" is clicked: open an empty form
   function handleAddClick() {
     setEditing(null)
+    setActionError('')
     setShowForm(true)
   }
 
-  // Runs when "Edit" is clicked: open the form with that order's details
-  function handleEditClick(order: Order) {
+  function handleEditClick(order: ApiOrder) {
     setEditing(order)
+    setActionError('')
     setShowForm(true)
   }
 
-  // Called by the form when the data is valid and Save was clicked
-  function handleSave(data: Omit<Order, '_id' | 'createdAt'>) {
-    if (editing) {
-      // EDIT: go through the list. For the order we edited, copy the old
-      // order and replace it with the new data. Other orders stay the same.
-      setOrders(orders.map((o) => (o._id === editing._id ? { ...o, ...data } : o)))
-    } else {
-      // ADD: make a new order. randomUUID gives a unique fake id.
-      // The real backend will make the _id later.
-      const newOrder: Order = {
-        _id: crypto.randomUUID(),
-        ...data,
-        // today's date as YYYY-MM-DD in the computer's own timezone
-        createdAt: new Date().toLocaleDateString('en-CA'),
+  // Called by the form when the data is valid.
+  // Adding sends customer, items and date (the backend works out the total
+  // and sets the status to Pending). Editing sends only status and date.
+  async function handleSave(data: OrderFormData) {
+    setSaving(true)
+    setActionError('')
+    try {
+      if (editing) {
+        await apiFetch(`/orders/${editing._id}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            orderStatus: data.orderStatus,
+            expectedDeliveryDate: data.expectedDeliveryDate,
+          }),
+        })
+      } else {
+        await apiFetch('/orders', {
+          method: 'POST',
+          body: JSON.stringify({
+            customer: data.customer,
+            items: data.items,
+            expectedDeliveryDate: data.expectedDeliveryDate,
+          }),
+        })
       }
-      setOrders([...orders, newOrder])
+      await loadAll()
+      setShowForm(false)
+      setEditing(null)
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not save the order')
+    } finally {
+      setSaving(false)
     }
+  }
 
-    // Close the form after saving
-    setShowForm(false)
-    setEditing(null)
+  // Admin only: delete an order after the user confirms
+  async function handleDelete(order: ApiOrder) {
+    const name = order.customer?.fullName ?? 'this customer'
+    if (!window.confirm(`Delete the order of ${name}? This cannot be undone.`)) return
+    setActionError('')
+    try {
+      await apiFetch(`/orders/${order._id}`, { method: 'DELETE' })
+      await loadAll()
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not delete the order')
+    }
   }
 
   return (
     <div>
-      {/* Page title and the Add button */}
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-2xl font-bold">Orders</h2>
         <button
@@ -93,17 +150,23 @@ function Orders() {
         </button>
       </div>
 
-      {/* The form only shows when showForm is true.
-          The key resets the form when we switch between orders. */}
+      {actionError && (
+        <p className="bg-red-100 text-red-700 px-3 py-2 rounded mb-4">{actionError}</p>
+      )}
+
+      {/* The key resets the form when we switch between orders */}
       {showForm && (
         <OrderForm
           key={editing?._id ?? 'new'}
           order={editing}
           customers={customers}
+          furniture={availableFurniture}
+          saving={saving}
           onSave={handleSave}
           onCancel={() => {
             setShowForm(false)
             setEditing(null)
+            setActionError('')
           }}
         />
       )}
@@ -130,48 +193,58 @@ function Orders() {
         </select>
       </div>
 
-      {/* Orders table */}
-      <table className="w-full bg-white rounded shadow text-left">
-        <thead className="bg-gray-200">
-          <tr>
-            <th className="p-2">Customer</th>
-            <th className="p-2">Furniture</th>
-            <th className="p-2">Qty</th>
-            <th className="p-2">Total (KES)</th>
-            <th className="p-2">Specifications</th>
-            <th className="p-2">Status</th>
-            <th className="p-2">Date</th>
-            <th className="p-2">Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {/* One row for each order that passed the search and filter */}
-          {filtered.map((o) => (
-            <tr key={o._id} className="border-t">
-              <td className="p-2">{getCustomerName(o.customerId)}</td>
-              <td className="p-2">{o.furnitureType}</td>
-              <td className="p-2">{o.quantity}</td>
-              {/* toLocaleString adds commas, so 45000 shows as 45,000 */}
-              <td className="p-2">{o.totalAmount.toLocaleString()}</td>
-              <td className="p-2">{o.specifications || '-'}</td>
-              <td className="p-2">{o.status}</td>
-              <td className="p-2">{o.createdAt}</td>
-              <td className="p-2">
-                <button
-                  onClick={() => handleEditClick(o)}
-                  className="text-amber-700 underline"
-                >
-                  Edit
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {loading && <p className="text-gray-500">Loading orders...</p>}
+      {loadError && (
+        <p className="bg-red-100 text-red-700 px-3 py-2 rounded mb-4">{loadError}</p>
+      )}
 
-      {/* Message when nothing matches */}
-      {filtered.length === 0 && (
-        <p className="text-gray-500 mt-3">No orders found.</p>
+      {!loading && !loadError && (
+        <>
+          <table className="w-full bg-white rounded shadow text-left">
+            <thead className="bg-gray-200">
+              <tr>
+                <th className="p-2">Customer</th>
+                <th className="p-2">Items</th>
+                <th className="p-2">Total (KES)</th>
+                <th className="p-2">Status</th>
+                <th className="p-2">Order Date</th>
+                <th className="p-2">Expected Delivery</th>
+                <th className="p-2">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((o) => (
+                <tr key={o._id} className="border-t">
+                  <td className="p-2">{o.customer?.fullName ?? 'Unknown customer'}</td>
+                  <td className="p-2">{itemsText(o)}</td>
+                  <td className="p-2">{o.totalAmount.toLocaleString()}</td>
+                  <td className="p-2">{o.orderStatus}</td>
+                  {/* Dates look like 2026-11-07T09:30:00.000Z, so we keep 10 characters */}
+                  <td className="p-2">{o.orderDate.slice(0, 10)}</td>
+                  <td className="p-2">{o.expectedDeliveryDate.slice(0, 10)}</td>
+                  <td className="p-2 whitespace-nowrap">
+                    <button
+                      onClick={() => handleEditClick(o)}
+                      className="text-amber-700 underline mr-3"
+                    >
+                      Edit
+                    </button>
+                    {isAdmin && (
+                      <button
+                        onClick={() => handleDelete(o)}
+                        className="text-red-600 underline"
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {filtered.length === 0 && <p className="text-gray-500 mt-3">No orders found.</p>}
+        </>
       )}
     </div>
   )
