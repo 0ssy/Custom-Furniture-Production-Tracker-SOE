@@ -1,5 +1,7 @@
 import { Routes, Route } from 'react-router-dom'
 import Layout from './components/Layout'
+import ProtectedRoute from './components/ProtectedRoute'
+import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import PagePlaceholder from './pages/PagePlaceholder'
 import Customers from './pages/Customers'
@@ -10,23 +12,27 @@ import Production from './pages/Production'
 import Payments from './pages/Payments'
 import Deliveries from './pages/Deliveries'
 
-// All the routes of the system are listed here.
-// A route connects a web address (like /deliveries) to a page.
-// Every page sits inside <Layout>, so the sidebar shows on all of them.
+// All the routes of the system.
+// /login is open to everyone.
+// Everything inside ProtectedRoute needs a login, and sits inside Layout
+// so the sidebar shows on all of those pages.
 function App() {
   return (
     <Routes>
-      <Route element={<Layout />}>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/customers" element={<Customers />} />
-        <Route path="/orders" element={<Orders />} />
-        <Route path="/furniture" element={<Furniture />} />
-        <Route path="/materials" element={<Materials />} />
-        <Route path="/production" element={<Production />} />
-        <Route path="/payments" element={<Payments />} />
-        {/* Deliveries is now a real page, not a placeholder */}
-        <Route path="/deliveries" element={<Deliveries />} />
-        <Route path="/reports" element={<PagePlaceholder title="Reports" />} />
+      <Route path="/login" element={<Login />} />
+
+      <Route element={<ProtectedRoute />}>
+        <Route element={<Layout />}>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/customers" element={<Customers />} />
+          <Route path="/orders" element={<Orders />} />
+          <Route path="/furniture" element={<Furniture />} />
+          <Route path="/materials" element={<Materials />} />
+          <Route path="/production" element={<Production />} />
+          <Route path="/payments" element={<Payments />} />
+          <Route path="/deliveries" element={<Deliveries />} />
+          <Route path="/reports" element={<PagePlaceholder title="Reports" />} />
+        </Route>
       </Route>
     </Routes>
   )
