@@ -46,3 +46,6 @@ Tested manually at `localhost:5173/customers`, logged in, backend running.
   customer added here does not appear on those pages until they are connected.
 - The list code accepts either an array or `{ customers: [...] }` from the backend.
 - The other pages will be connected one by one.
+- The form asks for exactly 10 digits for the phone number, which is stricter
+  than the backend (7 or more characters). This is a deliberate rule for local
+  numbers, and international numbers with a + are not accepted yet.

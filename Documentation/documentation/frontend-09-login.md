@@ -58,3 +58,8 @@ on port 5000.
 - The API address (`http://localhost:5000/api`) is written in `api.ts`. It
   must change when the system is deployed.
 - There is no "forgot password" because the backend has no such endpoint.
+- Anyone who can open the login page can register and get a Staff account,
+  because the backend register route is public. A real system would use
+  invitations or admin approval. Raised with Jose.
+- If the user logs out or switches account in one browser tab, other open tabs
+  do not update until they are refreshed.
