@@ -1,59 +1,73 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import type { Customer } from '../types/customer'
+import type { ApiCustomer } from '../types/customer'
 
-// Props = things the parent page gives to this form.
-// customer: if it exists we are EDITING, if not we are ADDING.
-// onSave: function to run when the form is valid and submitted.
-// onCancel: function to run when the user closes the form.
+// Props are the things the parent page (Customers.tsx) gives to this form.
+// customer: if it has a customer we are EDITING, if null we are ADDING.
+// saving:   true while the backend is busy, so Save cannot be clicked twice.
+// onSave:   runs when the form is valid.
+// onCancel: runs when Cancel is clicked.
 type Props = {
-  customer: Customer | null
-  onSave: (data: Omit<Customer, '_id' | 'createdAt'>) => void
+  customer: ApiCustomer | null
+  saving: boolean
+  onSave: (data: Omit<ApiCustomer, '_id' | 'createdAt'>) => void
   onCancel: () => void
 }
 
-function CustomerForm({ customer, onSave, onCancel }: Props) {
-  // Each input has its own state. When editing, we start with the
-  // customer's current values. When adding, we start empty.
-  const [name, setName] = useState(customer?.name ?? '')
+// Shape of the error messages. "?" means each one is optional.
+type FormErrors = {
+  fullName?: string
+  phone?: string
+  email?: string
+  address?: string
+}
+
+function CustomerForm({ customer, saving, onSave, onCancel }: Props) {
+  // One state for each input. When editing we start with the current values.
+  const [fullName, setFullName] = useState(customer?.fullName ?? '')
   const [phone, setPhone] = useState(customer?.phone ?? '')
   const [email, setEmail] = useState(customer?.email ?? '')
   const [address, setAddress] = useState(customer?.address ?? '')
 
-  // Holds validation error messages to show under the inputs
-  const [errors, setErrors] = useState<{ name?: string; phone?: string; email?: string }>({})
+  // Error messages shown under the inputs. Starts empty.
+  const [errors, setErrors] = useState<FormErrors>({})
 
-  // Checks the inputs and returns true if everything is fine
+  // Checks every input. Returns true if all is fine.
   function validate() {
-    const newErrors: { name?: string; phone?: string; email?: string } = {}
+    const newErrors: FormErrors = {}
 
-    if (name.trim() === '') {
-      newErrors.name = 'Name is required'
+    // Jose's backend needs at least 2 characters
+    if (fullName.trim().length < 2) {
+      newErrors.fullName = 'Name must be at least 2 characters'
     }
-    // Phone must be digits only, 10 numbers long (e.g. 0712345678)
+    // Backend needs 7+, we ask for exactly 10 digits (like 0712345678)
     if (!/^\d{10}$/.test(phone)) {
       newErrors.phone = 'Phone must be 10 digits'
     }
-    // Email is optional. If they type one, it must be: text, ONE @, text, a dot, text.
-    // [^\s@] means "any character except a space or @", so a second @ is rejected.
-    // We also reject two dots in a row like a@b..com
-    if (
-      email !== '' &&
-      (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.includes('..'))
-    ) {
-      newErrors.email = 'Email is not valid'
+    // Email is REQUIRED in the backend: one @, text, a dot, text, no ".."
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.includes('..')) {
+      newErrors.email = 'A valid email is required'
+    }
+    // Address is REQUIRED in the backend, at least 3 characters
+    if (address.trim().length < 3) {
+      newErrors.address = 'Address must be at least 3 characters'
     }
 
     setErrors(newErrors)
-    // If newErrors has no keys, there are no problems
     return Object.keys(newErrors).length === 0
   }
 
   // Runs when the user clicks Save
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault() // stops the browser from reloading the page
-    if (!validate()) return // stop here if something is wrong
-    onSave({ name: name.trim(), phone, email, address })
+    if (!validate()) return // something is wrong, so do not save
+
+    onSave({
+      fullName: fullName.trim(),
+      phone,
+      email: email.trim(),
+      address: address.trim(),
+    })
   }
 
   return (
@@ -64,13 +78,13 @@ function CustomerForm({ customer, onSave, onCancel }: Props) {
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-sm mb-1">Name *</label>
+          <label className="block text-sm mb-1">Full Name *</label>
           <input
             className="w-full border rounded px-2 py-1"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
           />
-          {errors.name && <p className="text-red-600 text-sm">{errors.name}</p>}
+          {errors.fullName && <p className="text-red-600 text-sm">{errors.fullName}</p>}
         </div>
 
         <div>
@@ -84,7 +98,7 @@ function CustomerForm({ customer, onSave, onCancel }: Props) {
         </div>
 
         <div>
-          <label className="block text-sm mb-1">Email</label>
+          <label className="block text-sm mb-1">Email *</label>
           <input
             className="w-full border rounded px-2 py-1"
             value={email}
@@ -94,18 +108,23 @@ function CustomerForm({ customer, onSave, onCancel }: Props) {
         </div>
 
         <div>
-          <label className="block text-sm mb-1">Address</label>
+          <label className="block text-sm mb-1">Address *</label>
           <input
             className="w-full border rounded px-2 py-1"
             value={address}
             onChange={(e) => setAddress(e.target.value)}
           />
+          {errors.address && <p className="text-red-600 text-sm">{errors.address}</p>}
         </div>
       </div>
 
       <div className="mt-4 flex gap-2">
-        <button type="submit" className="bg-amber-600 text-white px-4 py-1 rounded">
-          Save
+        <button
+          type="submit"
+          disabled={saving}
+          className="bg-amber-600 text-white px-4 py-1 rounded disabled:bg-gray-300"
+        >
+          {saving ? 'Saving...' : 'Save'}
         </button>
         <button
           type="button"
