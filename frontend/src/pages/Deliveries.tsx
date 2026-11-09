@@ -1,125 +1,188 @@
-import { useState } from 'react'
-import type { Delivery } from '../types/delivery'
+import { useCallback, useEffect, useState } from 'react'
+import type { ApiDelivery, DeliveryFormData } from '../types/delivery'
 import { DELIVERY_STATUSES, getNextStatus } from '../types/delivery'
-import { mockDeliveries } from '../data/mockDeliveries'
-import { mockOrders } from '../data/mockOrders'
-import { mockCustomers } from '../data/mockCustomers'
+import type { ApiOrder } from '../types/order'
+import { apiFetch } from '../services/api'
+import { extractList } from '../services/list'
+import { setOrderStatus } from '../services/orderStatus'
+import { useAuth } from '../context/AuthContext'
+import { orderLabel, refId } from '../utils/order'
 import { getToday } from '../utils/date'
 import DeliveryForm from '../components/DeliveryForm'
 
+// Colour of the status label
+function statusClass(status: string) {
+  if (status === 'Delivered') return 'text-green-700 font-bold'
+  if (status === 'In Transit') return 'text-amber-600 font-bold'
+  if (status === 'Failed') return 'text-red-600 font-bold'
+  return 'text-gray-700 font-bold' // Pending
+}
+
 function Deliveries() {
-  // The deliveries shown in the table. Starts with the fake data.
-  const [deliveries, setDeliveries] = useState<Delivery[]>(mockDeliveries)
+  // Only an Admin sees Delete, because the backend only lets Admins delete
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'Admin'
 
-  // NOTE: orders and customers are the original mock lists, so ones added
-  // on the other pages will not show here until we use the real backend.
-  const orders = mockOrders
-  const customers = mockCustomers
+  const [deliveries, setDeliveries] = useState<ApiDelivery[]>([])
+  const [orders, setOrders] = useState<ApiOrder[]>([])
 
-  // Text typed in the search box
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+
   const [search, setSearch] = useState('')
-
-  // The status chosen in the filter. '' means show all.
   const [statusFilter, setStatusFilter] = useState('')
 
-  // true = form visible, false = form hidden
   const [showForm, setShowForm] = useState(false)
-
-  // Which delivery are we editing? null means we are scheduling a new one.
-  const [editing, setEditing] = useState<Delivery | null>(null)
+  const [editing, setEditing] = useState<ApiDelivery | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [actionError, setActionError] = useState('')
 
   // Today's date as YYYY-MM-DD (see src/utils/date.ts)
   const today = getToday()
 
-  // Builds readable text for an order, like "Mary Wanjiku - Wardrobe (x1)".
-  function getOrderLabel(orderId: string) {
-    const order = orders.find((o) => o._id === orderId)
-    if (!order) return 'Unknown order'
-    const customer = customers.find((c) => c._id === order.customerId)
-    const name = customer ? customer.name : 'Unknown customer'
-    return `${name} - ${order.furnitureType} (x${order.quantity})`
-  }
+  // Gets deliveries and orders at the same time
+  const loadAll = useCallback(async () => {
+    try {
+      const [deliveriesData, ordersData] = await Promise.all([
+        apiFetch<unknown>('/deliveries'),
+        apiFetch<unknown>('/orders'),
+      ])
+      setDeliveries(extractList<ApiDelivery>(deliveriesData, 'deliveries'))
+      setOrders(extractList<ApiOrder>(ordersData, 'orders'))
+      setLoadError('')
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Could not load deliveries')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
-  // Finds the address of the customer who made the order
-  function getOrderAddress(orderId: string) {
-    const order = orders.find((o) => o._id === orderId)
-    if (!order) return ''
-    const customer = customers.find((c) => c._id === order.customerId)
-    return customer ? customer.address : ''
+  useEffect(() => {
+    loadAll()
+  }, [loadAll])
+
+  // Readable text for the order of a delivery
+  function getOrderText(delivery: ApiDelivery) {
+    const order = orders.find((o) => o._id === refId(delivery.order))
+    return order ? orderLabel(order) : 'Unknown order'
   }
 
   // Orders that can still be given a delivery:
-  // no delivery yet, and not Cancelled or Delivered.
+  // no delivery yet, and not Cancelled or Delivered
   const availableOrders = orders.filter(
     (o) =>
-      !deliveries.some((d) => d.order === o._id) &&
-      o.status !== 'Cancelled' &&
-      o.status !== 'Delivered'
+      !deliveries.some((d) => refId(d.order) === o._id) &&
+      o.orderStatus !== 'Cancelled' &&
+      o.orderStatus !== 'Delivered'
   )
 
-  // Keep only deliveries that match BOTH the search text and the status filter.
-  // The search checks the order text OR the address.
+  // Keep only deliveries that match BOTH the search and the status filter
   const filtered = deliveries.filter((d) => {
     const text = search.toLowerCase()
     const matchesSearch =
-      getOrderLabel(d.order).toLowerCase().includes(text) ||
+      getOrderText(d).toLowerCase().includes(text) ||
       d.deliveryAddress.toLowerCase().includes(text)
     const matchesStatus = statusFilter === '' || d.deliveryStatus === statusFilter
     return matchesSearch && matchesStatus
   })
 
   // A delivery is overdue when its date has passed and it is not finished
-  function isOverdue(d: Delivery) {
+  function isOverdue(d: ApiDelivery) {
     const notFinished = d.deliveryStatus === 'Pending' || d.deliveryStatus === 'In Transit'
-    return notFinished && d.deliveryDate < today
+    return notFinished && d.deliveryDate.slice(0, 10) < today
   }
 
-  // Colour of the status label
-  function statusClass(status: string) {
-    if (status === 'Delivered') return 'text-green-700 font-bold'
-    if (status === 'In Transit') return 'text-amber-600 font-bold'
-    if (status === 'Failed') return 'text-red-600 font-bold'
-    return 'text-gray-700 font-bold' // Pending
+  // When a delivery becomes Delivered, the order becomes Delivered too
+  async function syncOrderDelivered(orderId: string) {
+    try {
+      await setOrderStatus(orderId, 'Delivered')
+    } catch {
+      setActionError('The delivery was saved, but the order status could not be changed to Delivered.')
+    }
   }
 
-  // Runs when "+ Schedule Delivery" is clicked
   function handleAddClick() {
     setEditing(null)
+    setActionError('')
     setShowForm(true)
   }
 
-  // Runs when "Edit" is clicked
-  function handleEditClick(delivery: Delivery) {
+  function handleEditClick(delivery: ApiDelivery) {
     setEditing(delivery)
+    setActionError('')
     setShowForm(true)
   }
 
-  // Runs when the status button is clicked: move to the next status
-  function handleNextStatus(delivery: Delivery) {
+  // Moves a delivery to the next status
+  async function handleNextStatus(delivery: ApiDelivery) {
     const next = getNextStatus(delivery.deliveryStatus)
-    if (next === null) return // nothing after Delivered or Failed
-    setDeliveries(
-      deliveries.map((d) => (d._id === delivery._id ? { ...d, deliveryStatus: next } : d))
-    )
+    if (next === null) return
+    setActionError('')
+    try {
+      await apiFetch(`/deliveries/${delivery._id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ deliveryStatus: next }),
+      })
+      if (next === 'Delivered') await syncOrderDelivered(refId(delivery.order))
+      await loadAll()
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not change the status')
+    }
   }
 
-  // Called by the form when the data is valid and Save was clicked
-  function handleSave(data: Omit<Delivery, '_id'>) {
-    if (editing) {
-      // EDIT: replace only the delivery we edited
-      setDeliveries(deliveries.map((d) => (d._id === editing._id ? { ...d, ...data } : d)))
-    } else {
-      // SCHEDULE: make a new delivery with a unique fake id.
-      // The real backend will make the _id later.
-      setDeliveries([...deliveries, { _id: crypto.randomUUID(), ...data }])
+  // Called by the form when the data is valid
+  async function handleSave(data: DeliveryFormData) {
+    setSaving(true)
+    setActionError('')
+    try {
+      if (editing) {
+        await apiFetch(`/deliveries/${editing._id}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            deliveryAddress: data.deliveryAddress,
+            deliveryDate: data.deliveryDate,
+            deliveryStatus: data.deliveryStatus,
+            notes: data.notes,
+          }),
+        })
+        if (data.deliveryStatus === 'Delivered' && editing.deliveryStatus !== 'Delivered') {
+          await syncOrderDelivered(refId(editing.order))
+        }
+      } else {
+        await apiFetch('/deliveries', {
+          method: 'POST',
+          body: JSON.stringify({
+            order: data.order,
+            deliveryAddress: data.deliveryAddress,
+            deliveryDate: data.deliveryDate,
+            notes: data.notes || undefined,
+          }),
+        })
+      }
+      await loadAll()
+      setShowForm(false)
+      setEditing(null)
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not save the delivery')
+    } finally {
+      setSaving(false)
     }
-    setShowForm(false)
-    setEditing(null)
+  }
+
+  // Admin only: delete a delivery after the user confirms
+  async function handleDelete(delivery: ApiDelivery) {
+    if (!window.confirm('Delete this delivery? This cannot be undone.')) return
+    setActionError('')
+    try {
+      await apiFetch(`/deliveries/${delivery._id}`, { method: 'DELETE' })
+      await loadAll()
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not delete the delivery')
+    }
   }
 
   return (
     <div>
-      {/* Page title and the Schedule button */}
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-2xl font-bold">Deliveries</h2>
         <button
@@ -130,25 +193,27 @@ function Deliveries() {
         </button>
       </div>
 
-      {/* The key resets the form when we switch between deliveries.
-          minDate is today for a new delivery, and '' (no limit) when editing. */}
+      {actionError && (
+        <p className="bg-red-100 text-red-700 px-3 py-2 rounded mb-4">{actionError}</p>
+      )}
+
+      {/* The key resets the form when we switch between deliveries */}
       {showForm && (
         <DeliveryForm
           key={editing?._id ?? 'new'}
           delivery={editing}
-          availableOrders={availableOrders}
-          getOrderLabel={getOrderLabel}
-          getOrderAddress={getOrderAddress}
-          minDate={editing ? '' : today}
+          orders={availableOrders}
+          orderText={editing ? getOrderText(editing) : ''}
+          saving={saving}
           onSave={handleSave}
           onCancel={() => {
             setShowForm(false)
             setEditing(null)
+            setActionError('')
           }}
         />
       )}
 
-      {/* Search box and status filter side by side */}
       <div className="flex gap-3 mb-4">
         <input
           className="border rounded px-3 py-2 w-full max-w-sm bg-white"
@@ -170,63 +235,76 @@ function Deliveries() {
         </select>
       </div>
 
-      {/* Deliveries table */}
-      <table className="w-full bg-white rounded shadow text-left">
-        <thead className="bg-gray-200">
-          <tr>
-            <th className="p-2">Order</th>
-            <th className="p-2">Address</th>
-            <th className="p-2">Delivery Date</th>
-            <th className="p-2">Status</th>
-            <th className="p-2">Notes</th>
-            <th className="p-2">Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {filtered.map((d) => {
-            const next = getNextStatus(d.deliveryStatus)
-            return (
-              <tr key={d._id} className="border-t">
-                <td className="p-2">{getOrderLabel(d.order)}</td>
-                <td className="p-2">{d.deliveryAddress}</td>
-                <td className="p-2">
-                  {d.deliveryDate}
-                  {/* Red label if the delivery is late */}
-                  {isOverdue(d) && (
-                    <span className="text-red-600 font-bold ml-2">Overdue</span>
-                  )}
-                </td>
-                <td className={`p-2 ${statusClass(d.deliveryStatus)}`}>
-                  {d.deliveryStatus}
-                </td>
-                <td className="p-2">{d.notes || '-'}</td>
-                <td className="p-2 whitespace-nowrap">
-                  {/* Moves to the next status. Disabled when there is no next
-                      status, or while this same delivery is open in the form
-                      (otherwise saving the form could undo the change). */}
-                  <button
-                    onClick={() => handleNextStatus(d)}
-                    disabled={next === null || editing?._id === d._id}
-                    className="bg-amber-600 text-white px-2 py-1 rounded mr-2 disabled:bg-gray-300"
-                  >
-                    {next ? `Mark ${next}` : 'No next step'}
-                  </button>
-                  <button
-                    onClick={() => handleEditClick(d)}
-                    className="text-amber-700 underline"
-                  >
-                    Edit
-                  </button>
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
+      {loading && <p className="text-gray-500">Loading deliveries...</p>}
+      {loadError && (
+        <p className="bg-red-100 text-red-700 px-3 py-2 rounded mb-4">{loadError}</p>
+      )}
 
-      {/* Message when nothing matches */}
-      {filtered.length === 0 && (
-        <p className="text-gray-500 mt-3">No deliveries found.</p>
+      {!loading && !loadError && (
+        <>
+          <table className="w-full bg-white rounded shadow text-left">
+            <thead className="bg-gray-200">
+              <tr>
+                <th className="p-2">Order</th>
+                <th className="p-2">Address</th>
+                <th className="p-2">Delivery Date</th>
+                <th className="p-2">Status</th>
+                <th className="p-2">Notes</th>
+                <th className="p-2">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((d) => {
+                const next = getNextStatus(d.deliveryStatus)
+                return (
+                  <tr key={d._id} className="border-t">
+                    <td className="p-2">{getOrderText(d)}</td>
+                    <td className="p-2">{d.deliveryAddress}</td>
+                    <td className="p-2">
+                      {d.deliveryDate.slice(0, 10)}
+                      {isOverdue(d) && (
+                        <span className="text-red-600 font-bold ml-2">Overdue</span>
+                      )}
+                    </td>
+                    <td className={`p-2 ${statusClass(d.deliveryStatus)}`}>
+                      {d.deliveryStatus}
+                    </td>
+                    <td className="p-2">{d.notes || '-'}</td>
+                    <td className="p-2 whitespace-nowrap">
+                      {/* Disabled when there is no next step, or while this same
+                          delivery is open in the form (so saving cannot undo it) */}
+                      <button
+                        onClick={() => handleNextStatus(d)}
+                        disabled={next === null || editing?._id === d._id}
+                        className="bg-amber-600 text-white px-2 py-1 rounded mr-2 disabled:bg-gray-300"
+                      >
+                        {next ? `Mark ${next}` : 'No next step'}
+                      </button>
+                      <button
+                        onClick={() => handleEditClick(d)}
+                        className="text-amber-700 underline mr-3"
+                      >
+                        Edit
+                      </button>
+                      {isAdmin && (
+                        <button
+                          onClick={() => handleDelete(d)}
+                          className="text-red-600 underline"
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+
+          {filtered.length === 0 && (
+            <p className="text-gray-500 mt-3">No deliveries found.</p>
+          )}
+        </>
       )}
     </div>
   )

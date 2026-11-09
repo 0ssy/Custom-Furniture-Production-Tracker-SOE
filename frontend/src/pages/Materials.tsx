@@ -1,70 +1,115 @@
-import { useState } from 'react'
-import type { Material } from '../types/material'
-import { mockMaterials } from '../data/mockMaterials'
+import { useCallback, useEffect, useState } from 'react'
+import type { ApiMaterial, MaterialInput } from '../types/material'
+import { MATERIAL_CATEGORIES } from '../types/material'
+import { apiFetch } from '../services/api'
+import { extractList } from '../services/list'
+import { useAuth } from '../context/AuthContext'
+import { showMoney } from '../utils/money'
 import MaterialForm from '../components/MaterialForm'
 
+// A material is LOW when the stock is at or below its reorder level
+function isLow(m: ApiMaterial) {
+  return m.quantityInStock <= m.reorderLevel
+}
+
 function Materials() {
-  // The materials shown in the table. Starts with the fake data.
-  const [materials, setMaterials] = useState<Material[]>(mockMaterials)
+  // Only an Admin sees Delete, because the backend only lets Admins delete
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'Admin'
 
-  // Text typed in the search box
+  const [materials, setMaterials] = useState<ApiMaterial[]>([])
+
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+
+  // Search text, category filter, and the "low stock only" checkbox
   const [search, setSearch] = useState('')
-
-  // true = show only the materials that are low on stock
+  const [categoryFilter, setCategoryFilter] = useState('')
   const [lowOnly, setLowOnly] = useState(false)
 
-  // true = form visible, false = form hidden
   const [showForm, setShowForm] = useState(false)
+  const [editing, setEditing] = useState<ApiMaterial | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [actionError, setActionError] = useState('')
 
-  // Which material are we editing? null means we are adding a new one.
-  const [editing, setEditing] = useState<Material | null>(null)
+  // Gets all materials from the backend
+  const loadMaterials = useCallback(async () => {
+    try {
+      const data = await apiFetch<unknown>('/materials')
+      setMaterials(extractList<ApiMaterial>(data, 'materials'))
+      setLoadError('')
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Could not load materials')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
-  // A material is LOW when the stock is at or below its reorder level
-  function isLow(m: Material) {
-    return m.quantityInStock <= m.reorderLevel
-  }
+  useEffect(() => {
+    loadMaterials()
+  }, [loadMaterials])
 
-  // Count of low-stock materials, shown in the warning banner
+  // Number of low-stock materials, shown in the warning banner
   const lowCount = materials.filter(isLow).length
 
-  // Keep only materials that match the search text AND the low-stock checkbox
+  // Keep only materials that match the search, the category AND the checkbox
   const filtered = materials.filter((m) => {
     const matchesSearch = m.name.toLowerCase().includes(search.toLowerCase())
+    const matchesCategory = categoryFilter === '' || m.category === categoryFilter
     const matchesLow = !lowOnly || isLow(m)
-    return matchesSearch && matchesLow
+    return matchesSearch && matchesCategory && matchesLow
   })
 
-  // Open an empty form
   function handleAddClick() {
     setEditing(null)
+    setActionError('')
     setShowForm(true)
   }
 
-  // Open the form filled with the chosen material's details
-  function handleEditClick(material: Material) {
+  function handleEditClick(material: ApiMaterial) {
     setEditing(material)
+    setActionError('')
     setShowForm(true)
   }
 
-  // Called by the form when the data is valid and Save was clicked
-  function handleSave(data: Omit<Material, '_id'>) {
-    if (editing) {
-      // EDIT: replace only the material we edited, keep the others
-      setMaterials(
-        materials.map((m) => (m._id === editing._id ? { ...m, ...data } : m))
-      )
-    } else {
-      // ADD: new material with a unique fake id (backend makes it later)
-      setMaterials([...materials, { _id: crypto.randomUUID(), ...data }])
+  // Called by the form when the data is valid.
+  // POST creates a new material, PUT updates an existing one.
+  async function handleSave(data: MaterialInput) {
+    setSaving(true)
+    setActionError('')
+    try {
+      if (editing) {
+        await apiFetch(`/materials/${editing._id}`, {
+          method: 'PUT',
+          body: JSON.stringify(data),
+        })
+      } else {
+        await apiFetch('/materials', { method: 'POST', body: JSON.stringify(data) })
+      }
+      await loadMaterials()
+      setShowForm(false)
+      setEditing(null)
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not save the material')
+    } finally {
+      setSaving(false)
     }
-    // Close the form after saving
-    setShowForm(false)
-    setEditing(null)
+  }
+
+  // Admin only: delete a material after the user confirms
+  async function handleDelete(material: ApiMaterial) {
+    if (!window.confirm(`Delete "${material.name}"? This cannot be undone.`)) return
+    setActionError('')
+    try {
+      await apiFetch(`/materials/${material._id}`, { method: 'DELETE' })
+      await loadMaterials()
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not delete the material')
+    }
   }
 
   return (
     <div>
-      {/* Page title and the Add button */}
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-2xl font-bold">Materials Inventory</h2>
         <button
@@ -74,6 +119,10 @@ function Materials() {
           + Add Material
         </button>
       </div>
+
+      {actionError && (
+        <p className="bg-red-100 text-red-700 px-3 py-2 rounded mb-4">{actionError}</p>
+      )}
 
       {/* Warning banner, only shown if at least one material is low */}
       {lowCount > 0 && (
@@ -87,15 +136,16 @@ function Materials() {
         <MaterialForm
           key={editing?._id ?? 'new'}
           material={editing}
+          saving={saving}
           onSave={handleSave}
           onCancel={() => {
             setShowForm(false)
             setEditing(null)
+            setActionError('')
           }}
         />
       )}
 
-      {/* Search box and low-stock checkbox side by side */}
       <div className="flex gap-4 items-center mb-4">
         <input
           className="border rounded px-3 py-2 w-full max-w-sm bg-white"
@@ -103,7 +153,19 @@ function Materials() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <label className="flex items-center gap-2">
+        <select
+          className="border rounded px-3 py-2 bg-white"
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+        >
+          <option value="">All categories</option>
+          {MATERIAL_CATEGORIES.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+        <label className="flex items-center gap-2 whitespace-nowrap">
           <input
             type="checkbox"
             checked={lowOnly}
@@ -113,54 +175,71 @@ function Materials() {
         </label>
       </div>
 
-      {/* Materials table */}
-      <table className="w-full bg-white rounded shadow text-left">
-        <thead className="bg-gray-200">
-          <tr>
-            <th className="p-2">Name</th>
-            <th className="p-2">In Stock</th>
-            <th className="p-2">Reorder Level</th>
-            <th className="p-2">Unit Cost (KES)</th>
-            <th className="p-2">Supplier</th>
-            <th className="p-2">Status</th>
-            <th className="p-2">Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {filtered.map((m) => (
-            <tr key={m._id} className="border-t">
-              <td className="p-2">{m.name}</td>
-              {/* Stock with its unit, like "120 planks" */}
-              <td className="p-2">
-                {m.quantityInStock} {m.unit}
-              </td>
-              <td className="p-2">{m.reorderLevel}</td>
-              <td className="p-2">{m.unitCost.toLocaleString()}</td>
-              <td className="p-2">{m.supplier || '-'}</td>
-              {/* Red label if low, green label if fine */}
-              <td className="p-2">
-                {isLow(m) ? (
-                  <span className="text-red-600 font-bold">Low stock</span>
-                ) : (
-                  <span className="text-green-700">In stock</span>
-                )}
-              </td>
-              <td className="p-2">
-                <button
-                  onClick={() => handleEditClick(m)}
-                  className="text-amber-700 underline"
-                >
-                  Edit
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {loading && <p className="text-gray-500">Loading materials...</p>}
+      {loadError && (
+        <p className="bg-red-100 text-red-700 px-3 py-2 rounded mb-4">{loadError}</p>
+      )}
 
-      {/* Message when nothing matches */}
-      {filtered.length === 0 && (
-        <p className="text-gray-500 mt-3">No materials found.</p>
+      {!loading && !loadError && (
+        <>
+          <table className="w-full bg-white rounded shadow text-left">
+            <thead className="bg-gray-200">
+              <tr>
+                <th className="p-2">Name</th>
+                <th className="p-2">Category</th>
+                <th className="p-2">In Stock</th>
+                <th className="p-2">Reorder Level</th>
+                <th className="p-2">Unit Cost (KES)</th>
+                <th className="p-2">Status</th>
+                <th className="p-2">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((m) => (
+                <tr key={m._id} className="border-t">
+                  <td className="p-2">
+                    {m.name}
+                    <span className="block text-sm text-gray-500">{m.description}</span>
+                  </td>
+                  <td className="p-2">{m.category}</td>
+                  {/* Stock with its unit, like "120 Pieces" */}
+                  <td className="p-2">
+                    {m.quantityInStock} {m.unit}
+                  </td>
+                  <td className="p-2">{m.reorderLevel}</td>
+                  <td className="p-2">{showMoney(m.unitCost)}</td>
+                  <td className="p-2">
+                    {isLow(m) ? (
+                      <span className="text-red-600 font-bold">Low stock</span>
+                    ) : (
+                      <span className="text-green-700">In stock</span>
+                    )}
+                  </td>
+                  <td className="p-2 whitespace-nowrap">
+                    <button
+                      onClick={() => handleEditClick(m)}
+                      className="text-amber-700 underline mr-3"
+                    >
+                      Edit
+                    </button>
+                    {isAdmin && (
+                      <button
+                        onClick={() => handleDelete(m)}
+                        className="text-red-600 underline"
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {filtered.length === 0 && (
+            <p className="text-gray-500 mt-3">No materials found.</p>
+          )}
+        </>
       )}
     </div>
   )

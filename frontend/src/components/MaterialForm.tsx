@@ -1,19 +1,23 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import type { Material } from '../types/material'
-import { MATERIAL_UNITS } from '../types/material'
+import type { ApiMaterial, MaterialInput } from '../types/material'
+import { MATERIAL_CATEGORIES, MATERIAL_UNITS } from '../types/material'
 
-// Props are the things the parent page gives to this form.
+// Props are the things the parent page (Materials.tsx) gives to this form.
 // material: if it has a material we are EDITING, if null we are ADDING.
+// saving:   true while the backend is busy.
 type Props = {
-  material: Material | null
-  onSave: (data: Omit<Material, '_id'>) => void
+  material: ApiMaterial | null
+  saving: boolean
+  onSave: (data: MaterialInput) => void
   onCancel: () => void
 }
 
 // Shape of the error messages. "?" means each one is optional.
 type FormErrors = {
   name?: string
+  category?: string
+  description?: string
   unit?: string
   quantityInStock?: string
   reorderLevel?: string
@@ -27,10 +31,11 @@ function isZeroOrMore(text: string) {
   return text.trim() !== '' && Number.isFinite(n) && n >= 0
 }
 
-function MaterialForm({ material, onSave, onCancel }: Props) {
-  // One state for each input. Numbers are kept as text while typing
-  // and changed to numbers when saving.
+function MaterialForm({ material, saving, onSave, onCancel }: Props) {
+  // One state for each input. Numbers are kept as text while typing.
   const [name, setName] = useState(material?.name ?? '')
+  const [category, setCategory] = useState(material?.category ?? '')
+  const [description, setDescription] = useState(material?.description ?? '')
   const [unit, setUnit] = useState(material?.unit ?? '')
   const [quantityInStock, setQuantityInStock] = useState(
     material ? String(material.quantityInStock) : ''
@@ -39,41 +44,40 @@ function MaterialForm({ material, onSave, onCancel }: Props) {
     material ? String(material.reorderLevel) : ''
   )
   const [unitCost, setUnitCost] = useState(material ? String(material.unitCost) : '')
-  const [supplier, setSupplier] = useState(material?.supplier ?? '')
 
-  // Error messages shown under the inputs. Starts empty.
   const [errors, setErrors] = useState<FormErrors>({})
 
   // Checks every input. Returns true if all is fine.
   function validate() {
     const newErrors: FormErrors = {}
 
-    if (name.trim() === '') newErrors.name = 'Name is required'
+    if (name.trim().length < 2) newErrors.name = 'Name must be at least 2 characters'
+    if (category === '') newErrors.category = 'Please choose a category'
+    if (description.trim().length < 3)
+      newErrors.description = 'Description must be at least 3 characters'
     if (unit === '') newErrors.unit = 'Please choose a unit'
     if (!isZeroOrMore(quantityInStock))
       newErrors.quantityInStock = 'Stock must be a number, 0 or more'
     if (!isZeroOrMore(reorderLevel))
       newErrors.reorderLevel = 'Reorder level must be a number, 0 or more'
-    // Unit cost must be bigger than 0
-    if (!isZeroOrMore(unitCost) || Number(unitCost) === 0)
-      newErrors.unitCost = 'Unit cost must be a number above 0'
+    if (!isZeroOrMore(unitCost)) newErrors.unitCost = 'Unit cost must be a number, 0 or more'
 
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
 
-  // Runs when the user clicks Save
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault() // stops the browser from reloading the page
-    if (!validate()) return // something is wrong, so do not save
+    if (!validate()) return
 
     onSave({
       name: name.trim(),
+      category,
+      description: description.trim(),
       unit,
       quantityInStock: Number(quantityInStock),
       reorderLevel: Number(reorderLevel),
       unitCost: Number(unitCost),
-      supplier: supplier.trim(),
     })
   }
 
@@ -84,7 +88,6 @@ function MaterialForm({ material, onSave, onCancel }: Props) {
       </h3>
 
       <div className="grid grid-cols-2 gap-3">
-        {/* Name */}
         <div>
           <label className="block text-sm mb-1">Name *</label>
           <input
@@ -95,7 +98,36 @@ function MaterialForm({ material, onSave, onCancel }: Props) {
           {errors.name && <p className="text-red-600 text-sm">{errors.name}</p>}
         </div>
 
-        {/* Unit dropdown */}
+        <div>
+          <label className="block text-sm mb-1">Category *</label>
+          <select
+            className="w-full border rounded px-2 py-1"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+          >
+            <option value="">-- Choose category --</option>
+            {MATERIAL_CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+          {errors.category && <p className="text-red-600 text-sm">{errors.category}</p>}
+        </div>
+
+        <div className="col-span-2">
+          <label className="block text-sm mb-1">Description *</label>
+          <input
+            className="w-full border rounded px-2 py-1"
+            placeholder="e.g. Seasoned mahogany planks"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+          {errors.description && (
+            <p className="text-red-600 text-sm">{errors.description}</p>
+          )}
+        </div>
+
         <div>
           <label className="block text-sm mb-1">Unit *</label>
           <select
@@ -113,7 +145,6 @@ function MaterialForm({ material, onSave, onCancel }: Props) {
           {errors.unit && <p className="text-red-600 text-sm">{errors.unit}</p>}
         </div>
 
-        {/* Quantity in stock */}
         <div>
           <label className="block text-sm mb-1">Quantity in Stock *</label>
           <input
@@ -126,7 +157,6 @@ function MaterialForm({ material, onSave, onCancel }: Props) {
           )}
         </div>
 
-        {/* Reorder level */}
         <div>
           <label className="block text-sm mb-1">Reorder Level *</label>
           <input
@@ -140,7 +170,6 @@ function MaterialForm({ material, onSave, onCancel }: Props) {
           )}
         </div>
 
-        {/* Unit cost */}
         <div>
           <label className="block text-sm mb-1">Unit Cost (KES) *</label>
           <input
@@ -150,22 +179,15 @@ function MaterialForm({ material, onSave, onCancel }: Props) {
           />
           {errors.unitCost && <p className="text-red-600 text-sm">{errors.unitCost}</p>}
         </div>
-
-        {/* Supplier (optional) */}
-        <div>
-          <label className="block text-sm mb-1">Supplier</label>
-          <input
-            className="w-full border rounded px-2 py-1"
-            value={supplier}
-            onChange={(e) => setSupplier(e.target.value)}
-          />
-        </div>
       </div>
 
-      {/* Buttons */}
       <div className="mt-4 flex gap-2">
-        <button type="submit" className="bg-amber-600 text-white px-4 py-1 rounded">
-          Save
+        <button
+          type="submit"
+          disabled={saving}
+          className="bg-amber-600 text-white px-4 py-1 rounded disabled:bg-gray-300"
+        >
+          {saving ? 'Saving...' : 'Save'}
         </button>
         <button
           type="button"
