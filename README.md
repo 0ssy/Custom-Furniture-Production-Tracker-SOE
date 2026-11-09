@@ -221,3 +221,30 @@ The backend is ready for integration with the frontend application.
 **Project:** Custom Furniture Production Tracker
 **Component:** Backend
 **Repository:** Custom-Furniture-Production-Tracker-SOE
+
+## Frontend
+
+The frontend is a React + TypeScript single-page app built with Vite and Tailwind CSS.
+It talks to the backend API at `http://localhost:5000/api`.
+
+### Features
+- Login and register, with protected pages (JWT token)
+- Customers, Furniture, Materials, Orders, Production, Payments and Deliveries
+- Dashboard with live numbers and printable Reports
+- Admin-only Delete buttons (the backend enforces permissions)
+
+### Run the frontend
+Start the backend first (see Backend section), then:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open `http://localhost:5173`. Register a staff account on the login page.
+
+### Frontend documentation
+Each feature has a document with its test table in `Documentation/documentation/`
+(files `frontend-01` to `frontend-17`). Files 10 to 17 describe the pages connected
+to the backend.
