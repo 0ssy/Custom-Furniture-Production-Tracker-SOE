@@ -3,7 +3,6 @@ import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
-import PagePlaceholder from './pages/PagePlaceholder'
 import Customers from './pages/Customers'
 import Orders from './pages/Orders'
 import Furniture from './pages/Furniture'
@@ -11,11 +10,13 @@ import Materials from './pages/Materials'
 import Production from './pages/Production'
 import Payments from './pages/Payments'
 import Deliveries from './pages/Deliveries'
+import Reports from './pages/Reports'
+import NotFound from './pages/NotFound'
 
-// All the routes of the system.
-// /login is open to everyone.
-// Everything inside ProtectedRoute needs a login, and sits inside Layout
-// so the sidebar shows on all of those pages.
+// All the routes of the system. Every page now uses the real backend.
+// /login is open to everyone. Everything inside ProtectedRoute needs a login
+// and sits inside Layout, so the sidebar shows on all of those pages.
+// The last route (path "*") catches every address that matches nothing.
 function App() {
   return (
     <Routes>
@@ -31,7 +32,8 @@ function App() {
           <Route path="/production" element={<Production />} />
           <Route path="/payments" element={<Payments />} />
           <Route path="/deliveries" element={<Deliveries />} />
-          <Route path="/reports" element={<PagePlaceholder title="Reports" />} />
+          <Route path="/reports" element={<Reports />} />
+          <Route path="*" element={<NotFound />} />
         </Route>
       </Route>
     </Routes>

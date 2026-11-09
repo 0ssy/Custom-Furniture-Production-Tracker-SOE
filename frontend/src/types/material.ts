@@ -1,14 +1,19 @@
-// The units shown in the dropdown, written once here.
-export const MATERIAL_UNITS = ['pieces', 'sheets', 'planks', 'metres', 'litres', 'kg'] as const
+// The categories and units. These are the same words as in Jose's
+// Material.ts model, so the backend will not reject them.
+export const MATERIAL_CATEGORIES = ['Timber', 'Hardware', 'Fabric', 'Finishing', 'Other'] as const
+export const MATERIAL_UNITS = ['Pieces', 'Metres', 'Sheets', 'Litres', 'Kilograms'] as const
 
-// A material kept in the workshop store.
-// Field names must match what Jose uses in the backend.
-export type Material = {
-  _id: string           // unique id (MongoDB creates this automatically)
-  name: string          // e.g. "Mahogany Timber"
-  unit: string          // how we count it: planks, litres, kg...
-  quantityInStock: number // how much we have now
-  reorderLevel: number  // when stock falls to this or below, it is LOW STOCK
-  unitCost: number      // cost of one unit in KES
-  supplier: string      // who we buy it from (optional)
+// A material as the backend sends it
+export type ApiMaterial = {
+  _id: string
+  name: string             // at least 2 characters
+  description: string      // required, at least 3 characters
+  category: string
+  unit: string
+  quantityInStock: number  // 0 or more
+  unitCost: number         // 0 or more, in KES
+  reorderLevel: number     // stock at or below this is LOW STOCK
 }
+
+// What the form sends to the backend (everything except the _id)
+export type MaterialInput = Omit<ApiMaterial, '_id'>

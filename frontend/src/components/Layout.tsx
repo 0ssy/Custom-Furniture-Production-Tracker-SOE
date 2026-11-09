@@ -28,7 +28,7 @@ function Layout() {
   return (
     <div className="flex min-h-screen bg-gray-100">
       {/* Left sidebar. flex-col lets us push the user box to the bottom */}
-      <aside className="w-60 bg-gray-900 text-white p-4 flex flex-col">
+        <aside className="w-60 bg-gray-900 text-white p-4 flex flex-col print:hidden">
         <h1 className="text-lg font-bold mb-6">Furniture Tracker</h1>
 
         <nav className="flex flex-col gap-1">
