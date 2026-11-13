@@ -1,5 +1,6 @@
-import { authorize } from "../middleware/authMiddleware.js";
+
 import express from "express";
+import { authorize } from "../middleware/authMiddleware.js";
 
 import {
   createFurniture,
@@ -11,19 +12,34 @@ import {
 
 const router = express.Router();
 
-// Create furniture
-router.post("/", createFurniture);
+router.post(
+  "/",
+  authorize("Administrator", "Manager"),
+  createFurniture
+);
 
-// Get all furniture
-router.get("/", getAllFurniture);
+router.get(
+  "/",
+  authorize("Administrator", "Manager", "Sales", "Production", "Delivery"),
+  getAllFurniture
+);
 
-// Get one furniture item
-router.get("/:id", getFurnitureById);
+router.get(
+  "/:id",
+  authorize("Administrator", "Manager", "Sales", "Production", "Delivery"),
+  getFurnitureById
+);
 
-// Update furniture
-router.put("/:id", updateFurniture);
+router.put(
+  "/:id",
+  authorize("Administrator", "Manager"),
+  updateFurniture
+);
 
-// Delete furniture
-router.delete("/:id", authorize("Admin"), deleteFurniture);
+router.delete(
+  "/:id",
+  authorize("Administrator"),
+  deleteFurniture
+);
 
 export default router;
