@@ -1,5 +1,6 @@
-import { authorize } from "../middleware/authMiddleware.js";
+
 import express from "express";
+import { authorize } from "../middleware/authMiddleware.js";
 
 import {
   createMaterial,
@@ -11,19 +12,34 @@ import {
 
 const router = express.Router();
 
-// Create material
-router.post("/", createMaterial);
+router.post(
+  "/",
+  authorize("Administrator", "Manager", "Production"),
+  createMaterial
+);
 
-// Get all materials
-router.get("/", getAllMaterials);
+router.get(
+  "/",
+  authorize("Administrator", "Manager", "Sales", "Production", "Delivery"),
+  getAllMaterials
+);
 
-// Get one material by ID
-router.get("/:id", getMaterialById);
+router.get(
+  "/:id",
+  authorize("Administrator", "Manager", "Sales", "Production", "Delivery"),
+  getMaterialById
+);
 
-// Update material
-router.put("/:id", updateMaterial);
+router.put(
+  "/:id",
+  authorize("Administrator", "Manager", "Production"),
+  updateMaterial
+);
 
-// Delete material
-router.delete("/:id", authorize("Admin"), deleteMaterial);
+router.delete(
+  "/:id",
+  authorize("Administrator"),
+  deleteMaterial
+);
 
 export default router;
