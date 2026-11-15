@@ -5,6 +5,7 @@ import type { ApiOrder } from '../types/order'
 import { apiFetch } from '../services/api'
 import { extractList } from '../services/list'
 import { useAuth } from '../context/AuthContext'
+import { canEdit, canDelete } from '../utils/permissions'
 import { showMoney } from '../utils/money'
 import { orderLabel, refId } from '../utils/order'
 import { sumPayments } from '../utils/paymentMath'
@@ -33,11 +34,11 @@ function balanceClass(status: string) {
 }
 
 function Payments() {
-  // Only an Admin sees Delete, because the backend only lets Admins delete
+  // Who is logged in. Only some roles may record payments; only the Administrator deletes.
   const { user } = useAuth()
-  const isAdmin = user?.role === 'Admin'
+  const isAdmin = canDelete(user?.role)
+  const editable = canEdit(user?.role, 'payments')
 
-  // Everything comes from the database
   const [payments, setPayments] = useState<ApiPayment[]>([])
   const [orders, setOrders] = useState<ApiOrder[]>([])
 
@@ -161,7 +162,7 @@ function Payments() {
     }
   }
 
-  // Admin only: delete a payment after the user confirms
+  // Administrator only: delete a payment after the user confirms
   async function handleDelete(payment: ApiPayment) {
     if (!window.confirm('Delete this payment? This cannot be undone.')) return
     setActionError('')
@@ -177,12 +178,14 @@ function Payments() {
     <div>
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-2xl font-bold">Payments</h2>
-        <button
-          onClick={handleAddClick}
-          className="bg-amber-600 text-white px-4 py-2 rounded"
-        >
-          + Record Payment
-        </button>
+        {editable && (
+          <button
+            onClick={handleAddClick}
+            className="bg-amber-600 text-white px-4 py-2 rounded"
+          >
+            + Record Payment
+          </button>
+        )}
       </div>
 
       {actionError && (
@@ -212,7 +215,6 @@ function Payments() {
             </div>
           </div>
 
-          {/* The key resets the form when we switch between orders */}
           {showForm && (
             <PaymentForm
               key={selectedOrderId || 'new'}
@@ -230,7 +232,6 @@ function Payments() {
             />
           )}
 
-          {/* Search box and balance status filter */}
           <div className="flex gap-3 mb-4">
             <input
               className="border rounded px-3 py-2 w-full max-w-sm bg-white"
@@ -280,14 +281,15 @@ function Payments() {
                     <td className="p-2">{showMoney(o.totalAmount - paid)}</td>
                     <td className={`p-2 ${balanceClass(status)}`}>{status}</td>
                     <td className="p-2">
-                      {/* Disabled when nothing more can be recorded */}
-                      <button
-                        onClick={() => handleRowClick(o._id)}
-                        disabled={getPayable(o._id) < 0.01}
-                        className="bg-amber-600 text-white px-2 py-1 rounded disabled:bg-gray-300"
-                      >
-                        Record Payment
-                      </button>
+                      {editable && (
+                        <button
+                          onClick={() => handleRowClick(o._id)}
+                          disabled={getPayable(o._id) < 0.01}
+                          className="bg-amber-600 text-white px-2 py-1 rounded disabled:bg-gray-300"
+                        >
+                          Record Payment
+                        </button>
+                      )}
                     </td>
                   </tr>
                 )
@@ -322,15 +324,17 @@ function Payments() {
                     <td className="p-2">{p.transactionReference || '-'}</td>
                     <td className={`p-2 ${recordClass(p.paymentStatus)}`}>{p.paymentStatus}</td>
                     <td className="p-2 whitespace-nowrap">
-                      {nextStatuses(p.paymentStatus).map((s) => (
-                        <button
-                          key={s}
-                          onClick={() => changeStatus(p, s)}
-                          className="bg-amber-600 text-white px-2 py-1 rounded mr-2"
-                        >
-                          Mark {s}
-                        </button>
-                      ))}
+                      {/* The status buttons only show to roles that may edit payments */}
+                      {editable &&
+                        nextStatuses(p.paymentStatus).map((s) => (
+                          <button
+                            key={s}
+                            onClick={() => changeStatus(p, s)}
+                            className="bg-amber-600 text-white px-2 py-1 rounded mr-2"
+                          >
+                            Mark {s}
+                          </button>
+                        ))}
                       {isAdmin && (
                         <button
                           onClick={() => handleDelete(p)}

@@ -8,12 +8,16 @@ export const API_URL = 'http://localhost:5000/api'
 const TOKEN_KEY = 'token'
 const USER_KEY = 'user'
 
+// The five roles from the requirements, the same words as Jose's User.ts
+export const ROLES = ['Administrator', 'Manager', 'Sales', 'Production', 'Delivery'] as const
+export type UserRole = (typeof ROLES)[number]
+
 // The logged-in user, in the shape Jose's login sends back
 export type AuthUser = {
   id: string
   fullName: string
   email: string
-  role: 'Admin' | 'Staff'
+  role: UserRole
 }
 
 // Reads the saved token (null if nobody is logged in)
@@ -50,7 +54,6 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   const token = getToken()
 
   // Tell the backend we send JSON. If we have a token, send it too.
-  // The backend checks the "Bearer <token>" text on every protected route.
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (token) {
     headers['Authorization'] = `Bearer ${token}`
@@ -69,7 +72,7 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
 
   if (!response.ok) {
     // 401 on a normal page means the token is missing, wrong or expired,
-    // so we log the user out and send them to the login page.
+    // or the account was deleted. We log the user out and send them to login.
     // We skip this for /auth paths, because a wrong password also gives 401.
     if (response.status === 401 && token && !path.startsWith('/auth')) {
       clearLogin()

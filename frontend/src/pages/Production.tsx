@@ -6,6 +6,7 @@ import { apiFetch } from '../services/api'
 import { extractList } from '../services/list'
 import { setOrderStatus } from '../services/orderStatus'
 import { useAuth } from '../context/AuthContext'
+import { canEdit, canDelete } from '../utils/permissions'
 import { orderLabel, refId } from '../utils/order'
 import ProductionForm from '../components/ProductionForm'
 
@@ -18,9 +19,10 @@ function statusClass(status: string) {
 }
 
 function Production() {
-  // Only an Admin sees Delete, because the backend only lets Admins delete
+  // Who is logged in. Only some roles may edit; only the Administrator deletes.
   const { user } = useAuth()
-  const isAdmin = user?.role === 'Admin'
+  const isAdmin = canDelete(user?.role)
+  const editable = canEdit(user?.role, 'production')
 
   const [jobs, setJobs] = useState<ApiProduction[]>([])
   const [orders, setOrders] = useState<ApiOrder[]>([])
@@ -84,6 +86,8 @@ function Production() {
   // In Progress makes the order In Production, Completed makes it Completed.
   // Cancelled and Delivered orders are never changed.
   async function syncOrder(orderId: string, status: ProductionStatus) {
+    // The backend lets only some roles edit orders, so skip for the others
+    if (!canEdit(user?.role, 'orders')) return
     const target = orderStatusFor(status)
     if (!target) return
     const order = orders.find((o) => o._id === orderId)
@@ -163,7 +167,7 @@ function Production() {
     }
   }
 
-  // Admin only: delete a job after the user confirms
+  // Administrator only: delete a job after the user confirms
   async function handleDelete(job: ApiProduction) {
     if (!window.confirm('Delete this production job? This cannot be undone.')) return
     setActionError('')
@@ -179,12 +183,14 @@ function Production() {
     <div>
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-2xl font-bold">Production Tracking</h2>
-        <button
-          onClick={handleAddClick}
-          className="bg-amber-600 text-white px-4 py-2 rounded"
-        >
-          + Assign Order
-        </button>
+        {editable && (
+          <button
+            onClick={handleAddClick}
+            className="bg-amber-600 text-white px-4 py-2 rounded"
+          >
+            + Assign Order
+          </button>
+        )}
       </div>
 
       {actionError && (
@@ -203,7 +209,6 @@ function Production() {
         ))}
       </div>
 
-      {/* The key resets the form when we switch between jobs */}
       {showForm && (
         <ProductionForm
           key={editing?._id ?? 'new'}
@@ -268,28 +273,31 @@ function Production() {
                     <td className={`p-2 ${statusClass(j.productionStatus)}`}>
                       {j.productionStatus}
                     </td>
-                    {/* Dates may be missing, so we show "-" when they are */}
                     <td className="p-2">{j.startDate ? j.startDate.slice(0, 10) : '-'}</td>
                     <td className="p-2">
                       {j.completionDate ? j.completionDate.slice(0, 10) : '-'}
                     </td>
                     <td className="p-2">{j.notes || '-'}</td>
                     <td className="p-2 whitespace-nowrap">
-                      {/* Disabled when there is no next step, or while this same
-                          job is open in the form (so saving cannot undo it) */}
-                      <button
-                        onClick={() => handleNextStatus(j)}
-                        disabled={next === null || editing?._id === j._id}
-                        className="bg-amber-600 text-white px-2 py-1 rounded mr-2 disabled:bg-gray-300"
-                      >
-                        {next ? `Move to ${next}` : 'Finished'}
-                      </button>
-                      <button
-                        onClick={() => handleEditClick(j)}
-                        className="text-amber-700 underline mr-3"
-                      >
-                        Edit
-                      </button>
+                      {editable && (
+                        <>
+                          {/* Disabled when there is no next step, or while this same
+                              job is open in the form (so saving cannot undo it) */}
+                          <button
+                            onClick={() => handleNextStatus(j)}
+                            disabled={next === null || editing?._id === j._id}
+                            className="bg-amber-600 text-white px-2 py-1 rounded mr-2 disabled:bg-gray-300"
+                          >
+                            {next ? `Move to ${next}` : 'Finished'}
+                          </button>
+                          <button
+                            onClick={() => handleEditClick(j)}
+                            className="text-amber-700 underline mr-3"
+                          >
+                            Edit
+                          </button>
+                        </>
+                      )}
                       {isAdmin && (
                         <button
                           onClick={() => handleDelete(j)}

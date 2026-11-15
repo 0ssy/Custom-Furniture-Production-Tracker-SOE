@@ -6,6 +6,7 @@ import type { ApiFurniture } from '../types/furniture'
 import { apiFetch } from '../services/api'
 import { extractList } from '../services/list'
 import { useAuth } from '../context/AuthContext'
+import { canEdit, canDelete } from '../utils/permissions'
 import OrderForm from '../components/OrderForm'
 
 // Turns the items of an order into text like "Queen Bed x2, Office Chair x1"
@@ -16,24 +17,22 @@ function itemsText(order: ApiOrder) {
 }
 
 function Orders() {
-  // Only an Admin sees Delete, because the backend only lets Admins delete
+  // Who is logged in. Only some roles may edit; only the Administrator deletes.
   const { user } = useAuth()
-  const isAdmin = user?.role === 'Admin'
+  const isAdmin = canDelete(user?.role)
+  const editable = canEdit(user?.role, 'orders')
 
-  // Everything now comes from the database
+  // Everything comes from the database
   const [orders, setOrders] = useState<ApiOrder[]>([])
   const [customers, setCustomers] = useState<ApiCustomer[]>([])
   const [furniture, setFurniture] = useState<ApiFurniture[]>([])
 
-  // true while loading, and the error text if loading fails
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
 
-  // Search text and status filter ('' means all statuses)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
 
-  // Form state
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<ApiOrder | null>(null)
   const [saving, setSaving] = useState(false)
@@ -59,7 +58,6 @@ function Orders() {
     }
   }, [])
 
-  // Load once, when the page opens
   useEffect(() => {
     loadAll()
   }, [loadAll])
@@ -68,7 +66,6 @@ function Orders() {
   const availableFurniture = furniture.filter((f) => f.isAvailable)
 
   // Keep only orders that match BOTH the search and the status filter.
-  // The search checks the customer's name OR the furniture names.
   const filtered = orders.filter((o) => {
     const text = search.toLowerCase()
     const matchesSearch =
@@ -90,7 +87,6 @@ function Orders() {
     setShowForm(true)
   }
 
-  // Called by the form when the data is valid.
   // Adding sends customer, items and date (the backend works out the total
   // and sets the status to Pending). Editing sends only status and date.
   async function handleSave(data: OrderFormData) {
@@ -125,7 +121,7 @@ function Orders() {
     }
   }
 
-  // Admin only: delete an order after the user confirms
+  // Administrator only: delete an order after the user confirms
   async function handleDelete(order: ApiOrder) {
     const name = order.customer?.fullName ?? 'this customer'
     if (!window.confirm(`Delete the order of ${name}? This cannot be undone.`)) return
@@ -142,19 +138,20 @@ function Orders() {
     <div>
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-2xl font-bold">Orders</h2>
-        <button
-          onClick={handleAddClick}
-          className="bg-amber-600 text-white px-4 py-2 rounded"
-        >
-          + Add Order
-        </button>
+        {editable && (
+          <button
+            onClick={handleAddClick}
+            className="bg-amber-600 text-white px-4 py-2 rounded"
+          >
+            + Add Order
+          </button>
+        )}
       </div>
 
       {actionError && (
         <p className="bg-red-100 text-red-700 px-3 py-2 rounded mb-4">{actionError}</p>
       )}
 
-      {/* The key resets the form when we switch between orders */}
       {showForm && (
         <OrderForm
           key={editing?._id ?? 'new'}
@@ -171,7 +168,6 @@ function Orders() {
         />
       )}
 
-      {/* Search box and status filter side by side */}
       <div className="flex gap-3 mb-4">
         <input
           className="border rounded px-3 py-2 w-full max-w-sm bg-white"
@@ -219,16 +215,17 @@ function Orders() {
                   <td className="p-2">{itemsText(o)}</td>
                   <td className="p-2">{o.totalAmount.toLocaleString()}</td>
                   <td className="p-2">{o.orderStatus}</td>
-                  {/* Dates look like 2026-11-07T09:30:00.000Z, so we keep 10 characters */}
                   <td className="p-2">{o.orderDate.slice(0, 10)}</td>
                   <td className="p-2">{o.expectedDeliveryDate.slice(0, 10)}</td>
                   <td className="p-2 whitespace-nowrap">
-                    <button
-                      onClick={() => handleEditClick(o)}
-                      className="text-amber-700 underline mr-3"
-                    >
-                      Edit
-                    </button>
+                    {editable && (
+                      <button
+                        onClick={() => handleEditClick(o)}
+                        className="text-amber-700 underline mr-3"
+                      >
+                        Edit
+                      </button>
+                    )}
                     {isAdmin && (
                       <button
                         onClick={() => handleDelete(o)}

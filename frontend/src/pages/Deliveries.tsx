@@ -6,6 +6,7 @@ import { apiFetch } from '../services/api'
 import { extractList } from '../services/list'
 import { setOrderStatus } from '../services/orderStatus'
 import { useAuth } from '../context/AuthContext'
+import { canEdit, canDelete } from '../utils/permissions'
 import { orderLabel, refId } from '../utils/order'
 import { getToday } from '../utils/date'
 import DeliveryForm from '../components/DeliveryForm'
@@ -19,9 +20,10 @@ function statusClass(status: string) {
 }
 
 function Deliveries() {
-  // Only an Admin sees Delete, because the backend only lets Admins delete
+  // Who is logged in. Only some roles may edit; only the Administrator deletes.
   const { user } = useAuth()
-  const isAdmin = user?.role === 'Admin'
+  const isAdmin = canDelete(user?.role)
+  const editable = canEdit(user?.role, 'deliveries')
 
   const [deliveries, setDeliveries] = useState<ApiDelivery[]>([])
   const [orders, setOrders] = useState<ApiOrder[]>([])
@@ -94,6 +96,8 @@ function Deliveries() {
 
   // When a delivery becomes Delivered, the order becomes Delivered too
   async function syncOrderDelivered(orderId: string) {
+    // The backend lets only some roles edit orders, so skip for the others
+    if (!canEdit(user?.role, 'orders')) return
     try {
       await setOrderStatus(orderId, 'Delivered')
     } catch {
@@ -169,7 +173,7 @@ function Deliveries() {
     }
   }
 
-  // Admin only: delete a delivery after the user confirms
+  // Administrator only: delete a delivery after the user confirms
   async function handleDelete(delivery: ApiDelivery) {
     if (!window.confirm('Delete this delivery? This cannot be undone.')) return
     setActionError('')
@@ -185,19 +189,20 @@ function Deliveries() {
     <div>
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-2xl font-bold">Deliveries</h2>
-        <button
-          onClick={handleAddClick}
-          className="bg-amber-600 text-white px-4 py-2 rounded"
-        >
-          + Schedule Delivery
-        </button>
+        {editable && (
+          <button
+            onClick={handleAddClick}
+            className="bg-amber-600 text-white px-4 py-2 rounded"
+          >
+            + Schedule Delivery
+          </button>
+        )}
       </div>
 
       {actionError && (
         <p className="bg-red-100 text-red-700 px-3 py-2 rounded mb-4">{actionError}</p>
       )}
 
-      {/* The key resets the form when we switch between deliveries */}
       {showForm && (
         <DeliveryForm
           key={editing?._id ?? 'new'}
@@ -271,21 +276,25 @@ function Deliveries() {
                     </td>
                     <td className="p-2">{d.notes || '-'}</td>
                     <td className="p-2 whitespace-nowrap">
-                      {/* Disabled when there is no next step, or while this same
-                          delivery is open in the form (so saving cannot undo it) */}
-                      <button
-                        onClick={() => handleNextStatus(d)}
-                        disabled={next === null || editing?._id === d._id}
-                        className="bg-amber-600 text-white px-2 py-1 rounded mr-2 disabled:bg-gray-300"
-                      >
-                        {next ? `Mark ${next}` : 'No next step'}
-                      </button>
-                      <button
-                        onClick={() => handleEditClick(d)}
-                        className="text-amber-700 underline mr-3"
-                      >
-                        Edit
-                      </button>
+                      {editable && (
+                        <>
+                          {/* Disabled when there is no next step, or while this same
+                              delivery is open in the form (so saving cannot undo it) */}
+                          <button
+                            onClick={() => handleNextStatus(d)}
+                            disabled={next === null || editing?._id === d._id}
+                            className="bg-amber-600 text-white px-2 py-1 rounded mr-2 disabled:bg-gray-300"
+                          >
+                            {next ? `Mark ${next}` : 'No next step'}
+                          </button>
+                          <button
+                            onClick={() => handleEditClick(d)}
+                            className="text-amber-700 underline mr-3"
+                          >
+                            Edit
+                          </button>
+                        </>
+                      )}
                       {isAdmin && (
                         <button
                           onClick={() => handleDelete(d)}
