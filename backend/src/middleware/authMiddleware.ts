@@ -1,15 +1,16 @@
+
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
+import User, { USER_ROLES, UserRole } from "../models/User.js";
 
 export interface AuthRequest extends Request {
   user?: {
     id: string;
-    role: "Admin" | "Staff";
+    role: UserRole;
   };
 }
 
-// Verify login token
-export const protect = (
+export const protect = async (
   req: AuthRequest,
   res: Response,
   next: NextFunction
@@ -32,12 +33,36 @@ export const protect = (
       });
     }
 
+    if (!token) {
+      return res.status(401).json({
+        message: "Authentication token missing",
+      });
+    }
+
     const decoded = jwt.verify(token, JWT_SECRET) as {
       id: string;
-      role: "Admin" | "Staff";
+      role: UserRole;
     };
 
-    req.user = decoded;
+    if (!decoded.id || !USER_ROLES.includes(decoded.role)) {
+      return res.status(401).json({
+        message: "Invalid authentication token",
+      });
+    }
+
+    // Always retrieve the current database role.
+    const user = await User.findById(decoded.id).select("role");
+
+    if (!user) {
+      return res.status(401).json({
+        message: "User account no longer exists",
+      });
+    }
+
+    req.user = {
+      id: user._id.toString(),
+      role: user.role,
+    };
 
     next();
   } catch {
@@ -47,9 +72,12 @@ export const protect = (
   }
 };
 
-// Restrict access by role
-export const authorize = (...roles: ("Admin" | "Staff")[]) => {
-  return (req: AuthRequest, res: Response, next: NextFunction) => {
+export const authorize = (...roles: UserRole[]) => {
+  return (
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction
+  ) => {
     if (!req.user || !roles.includes(req.user.role)) {
       return res.status(403).json({
         message: "You do not have permission to perform this action",

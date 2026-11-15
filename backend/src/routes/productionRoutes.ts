@@ -1,3 +1,4 @@
+
 import express from "express";
 import { authorize } from "../middleware/authMiddleware.js";
 
@@ -11,10 +12,34 @@ import {
 
 const router = express.Router();
 
-router.post("/", createProduction);
-router.get("/", getAllProduction);
-router.get("/:id", getProductionById);
-router.put("/:id", updateProduction);
-router.delete("/:id", authorize("Admin"), deleteProduction);
+router.post(
+  "/",
+  authorize("Administrator", "Manager", "Production"),
+  createProduction
+);
+
+router.get(
+  "/",
+  authorize("Administrator", "Manager", "Production", "Sales", "Delivery"),
+  getAllProduction
+);
+
+router.get(
+  "/:id",
+  authorize("Administrator", "Manager", "Production", "Sales", "Delivery"),
+  getProductionById
+);
+
+router.put(
+  "/:id",
+  authorize("Administrator", "Manager", "Production"),
+  updateProduction
+);
+
+router.delete(
+  "/:id",
+  authorize("Administrator"),
+  deleteProduction
+);
 
 export default router;

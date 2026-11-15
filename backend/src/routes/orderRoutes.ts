@@ -1,3 +1,4 @@
+
 import express from "express";
 import { authorize } from "../middleware/authMiddleware.js";
 
@@ -11,19 +12,34 @@ import {
 
 const router = express.Router();
 
-// Create order
-router.post("/", createOrder);
+router.post(
+  "/",
+  authorize("Administrator", "Manager", "Sales"),
+  createOrder
+);
 
-// Get all orders
-router.get("/", getAllOrders);
+router.get(
+  "/",
+  authorize("Administrator", "Manager", "Sales", "Production", "Delivery"),
+  getAllOrders
+);
 
-// Get one order by ID
-router.get("/:id", getOrderById);
+router.get(
+  "/:id",
+  authorize("Administrator", "Manager", "Sales", "Production", "Delivery"),
+  getOrderById
+);
 
-// Update order
-router.put("/:id", updateOrder);
+router.put(
+  "/:id",
+  authorize("Administrator", "Manager", "Sales"),
+  updateOrder
+);
 
-// Only Admin can delete orders
-router.delete("/:id", authorize("Admin"), deleteOrder);
+router.delete(
+  "/:id",
+  authorize("Administrator"),
+  deleteOrder
+);
 
 export default router;
