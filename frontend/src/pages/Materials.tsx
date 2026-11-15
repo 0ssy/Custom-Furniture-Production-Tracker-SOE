@@ -4,6 +4,7 @@ import { MATERIAL_CATEGORIES } from '../types/material'
 import { apiFetch } from '../services/api'
 import { extractList } from '../services/list'
 import { useAuth } from '../context/AuthContext'
+import { canEdit, canDelete } from '../utils/permissions'
 import { showMoney } from '../utils/money'
 import MaterialForm from '../components/MaterialForm'
 
@@ -13,9 +14,10 @@ function isLow(m: ApiMaterial) {
 }
 
 function Materials() {
-  // Only an Admin sees Delete, because the backend only lets Admins delete
+  // Who is logged in. Only some roles may edit; only the Administrator deletes.
   const { user } = useAuth()
-  const isAdmin = user?.role === 'Admin'
+  const isAdmin = canDelete(user?.role)
+  const editable = canEdit(user?.role, 'materials')
 
   const [materials, setMaterials] = useState<ApiMaterial[]>([])
 
@@ -72,7 +74,6 @@ function Materials() {
     setShowForm(true)
   }
 
-  // Called by the form when the data is valid.
   // POST creates a new material, PUT updates an existing one.
   async function handleSave(data: MaterialInput) {
     setSaving(true)
@@ -96,7 +97,7 @@ function Materials() {
     }
   }
 
-  // Admin only: delete a material after the user confirms
+  // Administrator only: delete a material after the user confirms
   async function handleDelete(material: ApiMaterial) {
     if (!window.confirm(`Delete "${material.name}"? This cannot be undone.`)) return
     setActionError('')
@@ -112,12 +113,14 @@ function Materials() {
     <div>
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-2xl font-bold">Materials Inventory</h2>
-        <button
-          onClick={handleAddClick}
-          className="bg-amber-600 text-white px-4 py-2 rounded"
-        >
-          + Add Material
-        </button>
+        {editable && (
+          <button
+            onClick={handleAddClick}
+            className="bg-amber-600 text-white px-4 py-2 rounded"
+          >
+            + Add Material
+          </button>
+        )}
       </div>
 
       {actionError && (
@@ -131,7 +134,6 @@ function Materials() {
         </p>
       )}
 
-      {/* The key resets the form when we switch between materials */}
       {showForm && (
         <MaterialForm
           key={editing?._id ?? 'new'}
@@ -202,7 +204,6 @@ function Materials() {
                     <span className="block text-sm text-gray-500">{m.description}</span>
                   </td>
                   <td className="p-2">{m.category}</td>
-                  {/* Stock with its unit, like "120 Pieces" */}
                   <td className="p-2">
                     {m.quantityInStock} {m.unit}
                   </td>
@@ -216,12 +217,14 @@ function Materials() {
                     )}
                   </td>
                   <td className="p-2 whitespace-nowrap">
-                    <button
-                      onClick={() => handleEditClick(m)}
-                      className="text-amber-700 underline mr-3"
-                    >
-                      Edit
-                    </button>
+                    {editable && (
+                      <button
+                        onClick={() => handleEditClick(m)}
+                        className="text-amber-700 underline mr-3"
+                      >
+                        Edit
+                      </button>
+                    )}
                     {isAdmin && (
                       <button
                         onClick={() => handleDelete(m)}

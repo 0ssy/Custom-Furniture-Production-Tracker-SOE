@@ -19,6 +19,12 @@ function Layout() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
 
+  // Only the Administrator gets one extra menu item: Users
+  const items =
+    user?.role === 'Administrator'
+      ? [...menuItems, { label: 'Users', path: '/users' }]
+      : menuItems
+
   // Log out, then go to the login page
   function handleLogout() {
     logout()
@@ -27,12 +33,12 @@ function Layout() {
 
   return (
     <div className="flex min-h-screen bg-gray-100">
-      {/* Left sidebar. flex-col lets us push the user box to the bottom */}
-        <aside className="w-60 bg-gray-900 text-white p-4 flex flex-col print:hidden">
+      {/* Left sidebar. print:hidden hides it when a report is printed */}
+      <aside className="w-60 bg-gray-900 text-white p-4 flex flex-col print:hidden">
         <h1 className="text-lg font-bold mb-6">Furniture Tracker</h1>
 
         <nav className="flex flex-col gap-1">
-          {menuItems.map((item) => (
+          {items.map((item) => (
             <NavLink
               key={item.path}
               to={item.path}

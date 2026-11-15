@@ -11,9 +11,10 @@ import Production from './pages/Production'
 import Payments from './pages/Payments'
 import Deliveries from './pages/Deliveries'
 import Reports from './pages/Reports'
+import Users from './pages/Users'
 import NotFound from './pages/NotFound'
 
-// All the routes of the system. Every page now uses the real backend.
+// All the routes of the system.
 // /login is open to everyone. Everything inside ProtectedRoute needs a login
 // and sits inside Layout, so the sidebar shows on all of those pages.
 // The last route (path "*") catches every address that matches nothing.
@@ -33,6 +34,7 @@ function App() {
           <Route path="/payments" element={<Payments />} />
           <Route path="/deliveries" element={<Deliveries />} />
           <Route path="/reports" element={<Reports />} />
+          <Route path="/users" element={<Users />} />
           <Route path="*" element={<NotFound />} />
         </Route>
       </Route>
